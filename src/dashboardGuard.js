@@ -151,10 +151,22 @@ async function hasValidApiKey(request) {
   return await validateApiKey(apiKey);
 }
 
+// M0 change from upstream: a loopback peer no longer gets the whole LLM API for
+// free. Upstream returned true for any local request, so anything running on the
+// machine (a browser page, a random script, an npm postinstall) could spend every
+// stored provider credential without presenting anything at all.
+//
+// Localhost must now authenticate like everyone else. The single exception is an
+// explicit operator opt-out (settings.requireApiKey === false) and even then only
+// from loopback — that is a deliberate choice the operator made, not a default.
 async function canAccessPublicLlmApi(request) {
-  if (isLocalRequest(request)) return true;
   if (await hasValidCliToken(request)) return true;
-  return await hasValidApiKey(request);
+  if (await hasValidApiKey(request)) return true;
+
+  const settings = await loadSettings();
+  if (settings && settings.requireApiKey === false && isLocalRequest(request)) return true;
+
+  return false;
 }
 
 async function canAccessLocalOnlyRoute(request) {
@@ -178,10 +190,14 @@ async function loadSettings() {
   }
 }
 
+// M0 change from upstream: `requireLogin === false` is honoured for loopback
+// only. Upstream applied it to every peer, so one settings write turned a
+// network-exposed dashboard into an open one — including the routes that manage
+// credentials. Disabling login is a local-convenience switch, not a remote one.
 async function isAuthenticated(request) {
   if (await hasValidToken(request)) return true;
   const settings = await loadSettings();
-  if (settings && settings.requireLogin === false) return true;
+  if (settings && settings.requireLogin === false && isLocalRequest(request)) return true;
   return false;
 }
 
@@ -196,6 +212,7 @@ export const __test__ = {
   extractApiKey,
   canAccessPublicLlmApi,
   canAccessLocalOnlyRoute,
+  isAuthenticated,
 };
 
 export async function proxy(request) {

@@ -103,15 +103,35 @@ describe("peer header trust", () => {
     expect(response.status).toBe(401);
   });
 
+  // M0 intentional change from upstream: proving locality is no longer the same
+  // thing as being authenticated. Upstream let any stamped loopback peer call the
+  // LLM API with no credential at all, so every other process on the machine could
+  // spend the stored provider keys. The positive cases below therefore present a
+  // key: what is under test here is whether locality is *recognised*, not whether
+  // it grants access. The 401 cases are unchanged.
   it("keeps serving a genuinely local request stamped by the wrapper", async () => {
+    mocks.validateApiKey.mockResolvedValue(true);
+
+    const response = await proxy(request("/api/v1/models", {
+      host: "localhost:20128",
+      "x-9r-real-ip": "127.0.0.1",
+      "x-9r-peer-token": PEER_TOKEN,
+      authorization: "Bearer sk-valid",
+    }));
+
+    expect(response).toBe(mocks.nextResponse);
+    // Called, not skipped: loopback is not a credential.
+    expect(mocks.validateApiKey).toHaveBeenCalledWith("sk-valid");
+  });
+
+  it("still refuses a genuinely local request that presents nothing", async () => {
     const response = await proxy(request("/api/v1/models", {
       host: "localhost:20128",
       "x-9r-real-ip": "127.0.0.1",
       "x-9r-peer-token": PEER_TOKEN,
     }));
 
-    expect(response).toBe(mocks.nextResponse);
-    expect(mocks.validateApiKey).not.toHaveBeenCalled();
+    expect(response.status).toBe(401);
   });
 
   // A dual-stack listener reports loopback as ::ffff:127.0.0.1, which the old
@@ -119,10 +139,13 @@ describe("peer header trust", () => {
   it.each(["::ffff:127.0.0.1", "::1", "[::1]", "127.0.0.1", "::FFFF:127.0.0.1"])(
     "treats %s as a loopback peer",
     async (peerIp) => {
+      mocks.validateApiKey.mockResolvedValue(true);
+
       const response = await proxy(request("/api/v1/models", {
         host: "localhost:20128",
         "x-9r-real-ip": peerIp,
         "x-9r-peer-token": PEER_TOKEN,
+        authorization: "Bearer sk-valid",
       }));
 
       expect(response).toBe(mocks.nextResponse);
@@ -166,8 +189,12 @@ describe("peer header trust", () => {
 
   it("accepts the legacy Host fallback only in development", async () => {
     process.env.NODE_ENV = "development";
+    mocks.validateApiKey.mockResolvedValue(true);
 
-    const response = await proxy(request("/api/v1/models", { host: "localhost:20127" }));
+    const response = await proxy(request("/api/v1/models", {
+      host: "localhost:20127",
+      authorization: "Bearer sk-valid",
+    }));
 
     expect(response).toBe(mocks.nextResponse);
   });

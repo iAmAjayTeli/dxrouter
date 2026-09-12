@@ -523,7 +523,15 @@ Runtime visibility sources:
 ## Security-Sensitive Boundaries
 
 - JWT secret (`JWT_SECRET`) secures dashboard session cookie verification/signing
-- Initial password fallback (`INITIAL_PASSWORD`, default `123456`) must be overridden in real deployments
+- Dashboard credential: there is **no default password** (M0). The first start generates a random
+  credential, prints it once and writes it to `<data root>/initial-credential.txt` (deleted at first
+  successful login). `INITIAL_PASSWORD` is an optional override, not a fallback.
+- Provider credentials are encrypted at rest (AES-256-GCM, `dxr1:` envelope) under a master key from
+  `DXR_MASTER_KEY` or the OS keychain; the server refuses to start if neither is usable.
+- Loopback is not a credential: local callers authenticate like anyone else. Binding a non-loopback
+  host requires `DXR_ALLOW_NETWORK=1` **and** authentication left enabled, or startup is refused.
+- This section predates M0 elsewhere; `CLAUDE.md` ("M0 — Foundation and Safety") is authoritative for
+  the current security defaults.
 - API key HMAC secret (`API_KEY_SECRET`) secures generated local API key format
 - Provider secrets (API keys/tokens) are persisted in local DB and should be protected at filesystem level
 - Cloud sync endpoints rely on API key auth + machine id semantics

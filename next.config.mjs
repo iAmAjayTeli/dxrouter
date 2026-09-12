@@ -28,6 +28,13 @@ const nextConfig = {
   outputFileTracingExcludes: {
     "*": ["./gitbook/**/*"]
   },
+  // The cache pricing records are read at runtime with `fs` (continuity/cache/pricing/
+  // source.js), so nothing in the module graph points at them and tracing cannot find
+  // them on its own. `/*` because six /v1 routes reach them through the M2 observer and a
+  // route missed here would silently lose cache-cost provenance in a standalone build.
+  outputFileTracingIncludes: {
+    "/*": ["./continuity/cache/pricing/data/**/*.yaml"]
+  },
   images: {
     unoptimized: true
   },

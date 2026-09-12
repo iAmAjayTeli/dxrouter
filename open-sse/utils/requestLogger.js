@@ -1,3 +1,15 @@
+// Wire-level request tracing, opt-in via ENABLE_REQUEST_LOGS=true.
+//
+// M0 changes two inherited behaviours here:
+//  - Header masking was commented out ("keep full token for testing"), so every
+//    traced request wrote the upstream Authorization header to disk in clear.
+//    Redaction is now unconditional and covers bodies and SSE chunks too, not
+//    just header bags — there is no flag to turn it off.
+//  - Logs went to `process.cwd()/logs`, i.e. a repo-relative store outside the
+//    single data root. They now live under DXR_DATA_DIR/logs.
+
+import { redactSecrets, redactString } from "@/lib/security/redact.js";
+
 // Check if running in Node.js environment (has fs module)
 const isNode = typeof process !== "undefined" && process.versions?.node && typeof window === "undefined";
 
@@ -14,9 +26,15 @@ async function ensureNodeModules() {
   try {
     fs = await import("fs");
     path = await import("path");
-    LOGS_DIR = path.join(typeof process !== "undefined" && process.cwd ? process.cwd() : ".", "logs");
+    // dataDir.js pulls in node:fs/os/path, so it is imported here rather than at
+    // module scope: this file is also loaded in Worker/browser bundles.
+    const { LOGS_DIR: dataLogsDir } = await import("@/lib/dataDir.js");
+    LOGS_DIR = dataLogsDir;
   } catch {
-    // Running in non-Node environment (Worker, Browser, etc.)
+    // Running in a non-Node environment (Worker, Browser, etc.), or the data root
+    // could not be resolved. Leaving LOGS_DIR null disables writing rather than
+    // falling back to a repo-relative directory.
+    LOGS_DIR = null;
   }
 }
 
@@ -57,37 +75,40 @@ async function createLogSession(sourceFormat, targetFormat, model) {
   }
 }
 
-// Write JSON file
+// Write JSON file. Every payload passes through the shared redactor first, so a
+// secret cannot reach disk regardless of which log stage produced it.
 function writeJsonFile(sessionPath, filename, data) {
   if (!fs || !sessionPath) return;
-  
+
   try {
     const filePath = path.join(sessionPath, filename);
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+    fs.writeFileSync(filePath, JSON.stringify(redactSecrets(data), null, 2));
   } catch (err) {
     console.log(`[LOG] Failed to write ${filename}:`, err.message);
   }
 }
 
-// Mask sensitive data in headers (DISABLED - keep full token for testing)
+// Append a raw stream chunk with secret-shaped substrings scrubbed.
+function appendChunk(sessionPath, filename, chunk) {
+  if (!fs || !sessionPath) return;
+  try {
+    fs.appendFileSync(path.join(sessionPath, filename), redactString(String(chunk ?? "")));
+  } catch {
+    // Ignore append errors
+  }
+}
+
+/**
+ * Hard-redact a header bag: secret headers keep their name (useful when reading a
+ * trace) but never their value. Unconditional — the old "disabled for testing"
+ * escape hatch is gone.
+ */
 function maskSensitiveHeaders(headers) {
   if (!headers) return {};
-  return { ...headers };
-  
-  // Old masking code (disabled):
-  // const masked = { ...headers };
-  // const sensitiveKeys = ["authorization", "x-api-key", "cookie", "token"];
-  // 
-  // for (const key of Object.keys(masked)) {
-  //   const lowerKey = key.toLowerCase();
-  //   if (sensitiveKeys.some(sk => lowerKey.includes(sk))) {
-  //     const value = masked[key];
-  //     if (value && value.length > 20) {
-  //       masked[key] = value.slice(0, 10) + "..." + value.slice(-5);
-  //     }
-  //   }
-  // }
-  // return masked;
+  const plain = typeof headers.entries === "function" && typeof headers.forEach === "function"
+    ? Object.fromEntries(headers.entries())
+    : headers;
+  return redactSecrets(plain);
 }
 
 // No-op logger when logging is disabled
@@ -170,31 +191,19 @@ export async function createRequestLogger(sourceFormat, targetFormat, model) {
         timestamp: new Date().toISOString(),
         status,
         statusText,
-        headers: headers ? (typeof headers.entries === "function" ? Object.fromEntries(headers.entries()) : headers) : {},
+        headers: maskSensitiveHeaders(headers),
         body
       });
     },
     
     // 5. Append streaming chunk to provider response
     appendProviderChunk(chunk) {
-      if (!fs || !sessionPath) return;
-      try {
-        const filePath = path.join(sessionPath, "5_res_provider.txt");
-        fs.appendFileSync(filePath, chunk);
-      } catch (err) {
-        // Ignore append errors
-      }
+      appendChunk(sessionPath, "5_res_provider.txt", chunk);
     },
     
     // 6. Append OpenAI intermediate chunks (target → openai)
     appendOpenAIChunk(chunk) {
-      if (!fs || !sessionPath) return;
-      try {
-        const filePath = path.join(sessionPath, "6_res_openai.txt");
-        fs.appendFileSync(filePath, chunk);
-      } catch (err) {
-        // Ignore append errors
-      }
+      appendChunk(sessionPath, "6_res_openai.txt", chunk);
     },
     
     // 7. Log converted response to client (for non-streaming)
@@ -207,13 +216,7 @@ export async function createRequestLogger(sourceFormat, targetFormat, model) {
     
     // 7. Append streaming chunk to converted response
     appendConvertedChunk(chunk) {
-      if (!fs || !sessionPath) return;
-      try {
-        const filePath = path.join(sessionPath, "7_res_client.txt");
-        fs.appendFileSync(filePath, chunk);
-      } catch (err) {
-        // Ignore append errors
-      }
+      appendChunk(sessionPath, "7_res_client.txt", chunk);
     },
     
     // 6. Log error
@@ -253,7 +256,7 @@ export function logError(provider, { error, url, model, requestBody }) {
       requestBody
     };
     
-    fs.appendFileSync(logPath, JSON.stringify(logEntry) + "\n");
+    fs.appendFileSync(logPath, JSON.stringify(redactSecrets(logEntry)) + "\n");
   } catch (err) {
     console.log("[LOG] Failed to write error log:", err.message);
   }

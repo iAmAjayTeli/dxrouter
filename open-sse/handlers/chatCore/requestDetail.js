@@ -50,8 +50,14 @@ export function extractUsageFromResponse(responseBody) {
     return {
       prompt_tokens: usageMetadata.promptTokenCount || 0,
       completion_tokens: usageMetadata.candidatesTokenCount || 0,
-      cached_tokens: usageMetadata.cachedContentTokenCount || 0,
-      reasoning_tokens: usageMetadata.thoughtsTokenCount || 0
+      // `?? null`, not `|| 0`: an absent field must not arrive downstream as a reported
+      // zero. Gemini omits cachedContentTokenCount entirely when nothing was cached, and
+      // a fabricated 0 there reads as "the provider measured a cache miss" — a measurement
+      // nobody took. Storage is unaffected: canonicalizeUsage() maps a null cache count to
+      // 0 for the usage row exactly as it did before, and takes the same branch either way
+      // (the key is present, so the Claude cache-fold path stays out of it).
+      cached_tokens: usageMetadata.cachedContentTokenCount ?? null,
+      reasoning_tokens: usageMetadata.thoughtsTokenCount ?? null
     };
   }
 
@@ -94,7 +100,75 @@ export function formatDoneLine({ usage, latency }) {
   return `DONE ${latency?.total ?? 0}ms${ttftStr} · ${inStr} · OUT ${outTok}`;
 }
 
-export function saveUsageStats({ provider, model, tokens, connectionId, apiKey, endpoint, label = "USAGE", silent = false }) {
+/**
+ * M2 observation for an attempt that produced no response (§12.1).
+ *
+ * The success path is observed from inside `saveUsageStats`, which only runs once a
+ * provider has answered. A 429, a 500 or a refused socket answers nothing, so without this
+ * the observation record contains only the attempts that worked — and the question a later
+ * milestone asks of that record is *why a route moved*, which is exactly the information a
+ * missing failure row deletes.
+ *
+ * Three properties this call has to have, and the reason each one matters here:
+ *
+ *  1. **It changes nothing.** No return value is read, no branch below or above depends on
+ *     it, and it cannot throw: the `try/catch` is unconditional. Fallback, retries,
+ *     rate-limit handling and `accountFallback` behave exactly as they did.
+ *  2. **It reports facts, it does not classify.** An HTTP status, the thrown error's name
+ *     and message, the response headers and two timings go out as they were observed.
+ *     Naming a 429 `rate_limit` is the host adapter layer's job, not this engine's, and the
+ *     message travels only so that layer can classify a transport error by shape — no
+ *     provider message is persisted anywhere (§14).
+ *  3. **It invents no usage.** `usage: null` means unavailable, and the engine records it as
+ *     unavailable. A failed attempt must never become a measured zero, a successful
+ *     observation, or a cache event (I3, I4).
+ *
+ * @param {object} args
+ * @param {((result: object) => void)|null} args.onProviderResult the M2 side channel; when
+ *        it is null — M2 off, or an inherited caller that never passed one — nothing happens
+ * @param {number|null} [args.httpStatus] the status the provider returned, if it answered
+ * @param {Error|null} [args.error] a thrown transport failure
+ * @param {object|null} [args.headers] response headers, read downstream only for a retry hint
+ * @param {number|null} [args.requestStartTime] `Date.now()` at dispatch, for `total_ms`
+ * @param {number|null} [args.ttfbMs] time to first byte, when a byte arrived
+ */
+export function observeFailedAttempt({ onProviderResult = null, provider, model, connectionId = null, endpoint = null, httpStatus = null, error = null, headers = null, requestStartTime = null, ttfbMs = null } = {}) {
+  if (typeof onProviderResult !== "function") return;
+  try {
+    onProviderResult({
+      provider,
+      model,
+      connectionId,
+      endpoint,
+      status: "error",
+      http_status: Number.isFinite(httpStatus) ? httpStatus : null,
+      // A plain object, not the Error: nothing downstream should hold a live stack, and
+      // `{name, message}` is everything the failure taxonomy reads.
+      error: error ? { name: error.name || null, message: error.message || String(error) } : null,
+      headers: headers && typeof headers.get === "function" ? headers : null,
+      ttfb_ms: Number.isFinite(ttfbMs) ? ttfbMs : null,
+      total_ms: Number.isFinite(requestStartTime) ? Date.now() - requestStartTime : null,
+      // Unavailable, not zero. See property 3 above.
+      usage: null,
+    });
+  } catch {
+    /* ignored on purpose: an observation may never fail a request */
+  }
+}
+
+export function saveUsageStats({ provider, model, tokens, connectionId, apiKey, endpoint, label = "USAGE", silent = false, onProviderResult = null }) {
+  // M2 observation side channel: a fire-and-forget notification carrying the usage the
+  // provider reported. It cannot change routing, it runs *above* the early returns below
+  // so a zero-token or failed attempt is still observed, and its failure is swallowed --
+  // observation must never fail a completion.
+  if (typeof onProviderResult === "function") {
+    try {
+      onProviderResult({ provider, model, usage: tokens, connectionId, endpoint });
+    } catch {
+      /* ignored on purpose */
+    }
+  }
+
   if (!tokens || typeof tokens !== "object") return;
 
   const inTokens = tokens.input_tokens ?? tokens.prompt_tokens ?? 0;

@@ -111,7 +111,15 @@ Production mode:
 
 ```bash
 npm run build
-PORT=20128 HOSTNAME=0.0.0.0 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run start
+PORT=20128 HOSTNAME=127.0.0.1 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run start
+```
+
+To reach the server from other machines, opt in explicitly — a non-loopback bind
+without this refuses to start, because it exposes the LLM API and every stored
+provider credential:
+
+```bash
+DXR_ALLOW_NETWORK=1 PORT=20128 HOSTNAME=0.0.0.0 npm run start
 ```
 
 Default URLs:
@@ -1220,6 +1228,7 @@ export INITIAL_PASSWORD="your-password"
 export DATA_DIR="/var/lib/9router"
 export PORT="20128"
 export HOSTNAME="0.0.0.0"
+export DXR_ALLOW_NETWORK="1"   # required for any non-loopback bind; keep authentication on
 export NODE_ENV="production"
 export NEXT_PUBLIC_BASE_URL="http://localhost:20128"
 export NEXT_PUBLIC_CLOUD_URL="https://9router.com"
@@ -1248,11 +1257,18 @@ Published images (multi-platform `linux/amd64` + `linux/arm64`):
 ```bash
 docker run -d \
   --name 9router \
-  -p 20128:20128 \
+  -p 127.0.0.1:20128:20128 \
   -v "$HOME/.9router:/app/data" \
-  -e DATA_DIR=/app/data \
+  -e DXR_DATA_DIR=/app/data \
+  -e DXR_ALLOW_NETWORK=1 \
+  -e DXR_MASTER_KEY="$(openssl rand -hex 32)" \
   decolua/9router:latest
 ```
+
+A container binds `0.0.0.0` internally, so it needs `DXR_ALLOW_NETWORK=1`; publishing on
+`127.0.0.1:` keeps the gateway off the network. `DXR_MASTER_KEY` encrypts provider
+credentials at rest — store it somewhere durable, or the connections have to be re-added
+after a restart with a different key.
 
 → Open http://localhost:20128
 
@@ -1262,14 +1278,16 @@ docker run -d \
 git clone https://github.com/decolua/9router.git
 cd 9router/app
 docker build -t 9router .
-docker run -d --name 9router -p 20128:20128 \
-  -v "$HOME/.9router:/app/data" -e DATA_DIR=/app/data 9router
+docker run -d --name 9router -p 127.0.0.1:20128:20128 \
+  -v "$HOME/.9router:/app/data" -e DXR_DATA_DIR=/app/data \
+  -e DXR_ALLOW_NETWORK=1 -e DXR_MASTER_KEY="$(openssl rand -hex 32)" 9router
 ```
 
 **Container defaults:**
 
 - `PORT=20128`
-- `HOSTNAME=0.0.0.0`
+- `HOSTNAME=0.0.0.0` (a container publishes a port, so it must bind all interfaces — pass
+  `-e DXR_ALLOW_NETWORK=1`, and keep dashboard login and API keys enabled)
 
 **Useful commands:**
 
@@ -1287,10 +1305,13 @@ docker pull decolua/9router:latest   # update to latest
 | Variable                                             | Default                                  | Description                                                                         |
 | ---------------------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------- |
 | `JWT_SECRET`                                         | Auto-generated (`~/.9router/jwt-secret`) | JWT signing secret for dashboard auth cookie (override to share across instances)   |
-| `INITIAL_PASSWORD`                                   | `123456`                                 | First login password when no saved hash exists                                      |
+| `INITIAL_PASSWORD`                                   | _(none)_                                 | Optional first-login password. Unset (recommended): the first start generates a random credential and prints it once. **There is no default password since M0.** |
+| `DXR_DATA_DIR`                                       | `%APPDATA%/9router` \| `~/.9router`      | Single data root for the database, backups, keys and logs (`DATA_DIR` is the deprecated spelling) |
+| `DXR_MASTER_KEY`                                     | OS keychain                              | 64 hex chars (or 32 bytes base64) encrypting provider credentials at rest. Without it and without a usable keychain the server refuses to start (see `DXR_KEY_STORE=file`) |
+| `DXR_ALLOW_NETWORK`                                  | `0`                                      | Required to bind anything other than loopback. Without it a non-loopback `HOSTNAME` refuses to start |
 | `DATA_DIR`                                           | `~/.9router`                             | Main app data location (SQLite at `$DATA_DIR/db/data.sqlite`)                       |
 | `PORT`                                               | framework default                        | Service port (`20128` in examples)                                                  |
-| `HOSTNAME`                                           | framework default                        | Bind host (Docker defaults to `0.0.0.0`)                                            |
+| `HOSTNAME`                                           | loopback                                 | Bind host. Anything other than loopback needs `DXR_ALLOW_NETWORK=1` (Docker: `0.0.0.0` + that opt-in) |
 | `NODE_ENV`                                           | runtime default                          | Set `production` for deploy                                                         |
 | `BASE_URL`                                           | `http://localhost:20128`                 | Server-side internal base URL used by cloud sync jobs                               |
 | `CLOUD_URL`                                          | `https://9router.com`                    | Server-side cloud sync endpoint base URL                                            |
@@ -1429,8 +1450,10 @@ Notes:
 
 **First login not working**
 
-- Check `INITIAL_PASSWORD` in `.env`
-- If unset, fallback password is `123456`
+- Since M0 there is **no default password**. The first start prints a generated credential once
+  and also writes it to `<data root>/initial-credential.txt`, which is deleted after the first
+  successful login. Lost it? `9router` → Settings → “Reset Password (generates a new one)”.
+- To choose the first password yourself, set `INITIAL_PASSWORD` in `.env` before the first start.
 
 **No request logs under `logs/`**
 

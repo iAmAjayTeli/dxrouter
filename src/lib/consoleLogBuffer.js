@@ -1,5 +1,6 @@
 import { EventEmitter } from "events";
 import { CONSOLE_LOG_CONFIG } from "@/shared/constants/config.js";
+import { redactString } from "@/lib/security/redact.js";
 
 const consoleLevels = ["log", "info", "warn", "error", "debug"];
 
@@ -62,7 +63,12 @@ function formatArg(arg) {
   }
 }
 
-function appendLine(line) {
+function appendLine(rawLine) {
+  // The buffer is a diagnostic: it is retained in memory, streamed to the dashboard
+  // log viewer and returned by /api/logs. Secret-shaped values are scrubbed on the
+  // way in. The operator's own terminal still gets the unmodified line — that copy
+  // is never persisted or served.
+  const line = redactString(rawLine);
   state.logs.push(line);
   const maxLines = CONSOLE_LOG_CONFIG.maxLines;
   if (state.logs.length > maxLines) {

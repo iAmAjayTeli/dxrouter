@@ -1,0 +1,35 @@
+{
+ "fixture_id": "synthetic-compaction",
+ "label": "synthetic",
+ "is_captured_http_traffic": false,
+ "workload": "Context compaction: a long history is replaced by a short summary while the tool set and system prompt stay byte-identical",
+ "source": {
+  "kind": "handwritten",
+  "note": "The shrink ratio is modelled on what agent clients actually do when they compact (a five-figure token history becomes a four-figure summary). Written by hand; no captured bytes. This is the KEYLESS variant, where no lineage may be claimed; see synthetic-compaction-keyed for the case where an explicit key makes the successor knowable."
+ },
+ "project_root": "/repo/dxrouter",
+ "protocol": "openai",
+ "model": "gpt-x",
+ "layer_sets": {
+  "comp": {
+   "system": "You are a coding agent. When the conversation grows too long it is summarized and you continue from the summary.",
+   "tools": [
+    { "type": "function", "function": { "name": "read_file", "parameters": { "type": "object", "properties": { "path": { "type": "string" } }, "required": ["path"] } } },
+    { "type": "function", "function": { "name": "edit_file", "parameters": { "type": "object", "properties": { "path": { "type": "string" }, "diff": { "type": "string" } }, "required": ["path", "diff"] } } }
+   ]
+  }
+ },
+ "turns": [
+  { "layers": "comp", "append": [["u", 900, "cp-u0"]], "expect": { "confidence": "unknown", "source": "new", "new_session": true } },
+  { "append": [["a", 5200, "cp-a0"], ["u", 8100, "cp-u1"]], "expect": { "confidence": "strongly_inferred", "source": "prefix_extension", "new_session": false, "same_session_as": 0 } },
+  { "append": [["a", 6400, "cp-a1"], ["u", 12000, "cp-u2"]], "expect": { "confidence": "strongly_inferred", "source": "prefix_extension", "new_session": false, "same_session_as": 0 } },
+  { "append": [["a", 7100, "cp-a2"], ["u", 15500, "cp-u3"]], "expect": { "confidence": "strongly_inferred", "source": "prefix_extension", "new_session": false, "same_session_as": 0 } },
+  {
+   "comment": "The client compacted: ~55 kB of history becomes a 4 kB summary plus the next instruction. Tools and system are untouched, which is the section 9 signature. Keyless, so the boundary is recorded and a fresh session opens WITHOUT claiming lineage.",
+   "reset": [["u", 4000, "cp-summary"], ["u", 300, "cp-u4"]],
+   "expect": { "confidence": "unknown", "source": "new", "relation": "shortened", "new_session": true, "boundary": "client_compaction_suspected", "different_session_from": 0, "notes_include": "compaction_shaped_candidate_not_claimed" }
+  },
+  { "append": [["a", 800, "cp-a4"], ["u", 500, "cp-u5"]], "expect": { "confidence": "strongly_inferred", "source": "prefix_extension", "new_session": false, "same_session_as": 4, "different_session_from": 0 } }
+ ],
+ "expected_totals": { "sessions": 2, "boundaries": 1, "false_continuations": 0, "false_splits": 0 }
+}

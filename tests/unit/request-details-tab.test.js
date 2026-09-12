@@ -22,7 +22,16 @@ beforeAll(async () => {
   vi.resetModules();
   db = await import("@/lib/db/index.js");
   await db.initDb();
-  await db.updateSettings({ enableObservability2: true, observabilityBatchSize: 1 });
+  // M0 intentional change from upstream: request diagnostics are opt-in, and the
+  // request/response bodies inside them are a second, separate opt-in. Upstream
+  // persisted both unless explicitly disabled, so this suite got its rows for
+  // free. It asks about body handling (truncation, reparsing), so it turns both
+  // switches on explicitly — the defaults are asserted in tests/security/.
+  await db.updateSettings({
+    enableObservability: true,
+    persistRequestBodies: true,
+    observabilityBatchSize: 1,
+  });
 
   const { getAdapter } = await import("@/lib/db/driver.js");
   adapter = await getAdapter();

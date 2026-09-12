@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { TRANSLATOR_LOGS_DIR } from "@/lib/dataDir";
+import { redactString } from "@/lib/security/redact";
 
 export async function POST(request) {
   try {
@@ -26,15 +28,19 @@ export async function POST(request) {
       return NextResponse.json({ success: false, error: "Invalid file name" }, { status: 400 });
     }
 
-    const logsDir = path.join(process.cwd(), "logs", "translator");
-    
+    // Under the one data root, not `process.cwd()`: these traces are diagnostics,
+    // and a repo-relative store escapes DXR_DATA_DIR entirely.
+    const logsDir = TRANSLATOR_LOGS_DIR;
+
     // Create directory if not exists
     if (!fs.existsSync(logsDir)) {
       fs.mkdirSync(logsDir, { recursive: true });
     }
 
     const filePath = path.join(logsDir, file);
-    fs.writeFileSync(filePath, content, "utf-8");
+    // Secret-shaped material is scrubbed even here: an inspector trace is still a
+    // diagnostic written to disk.
+    fs.writeFileSync(filePath, redactString(String(content)), "utf-8");
 
     return NextResponse.json({ success: true });
   } catch (error) {

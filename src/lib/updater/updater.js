@@ -20,8 +20,12 @@ const waitMaxMs = parseInt(process.env.UPDATER_WAIT_MAX_MS || "15000", 10);
 const waitCheckMs = parseInt(process.env.UPDATER_WAIT_CHECK_MS || "500", 10);
 const appPort = parseInt(process.env.UPDATER_APP_PORT || "20128", 10);
 
-// Data directory (match mitm/paths.js logic)
+// Data directory. This file is copied into the data root and run by plain node
+// with no bundler, so it cannot import `@/lib/dataDir` — it duplicates that
+// module's precedence instead (DXR_DATA_DIR → DATA_DIR → platform default) and
+// must be kept in step with it.
 function getDataDir() {
+  if (process.env.DXR_DATA_DIR) return process.env.DXR_DATA_DIR;
   if (process.env.DATA_DIR) return process.env.DATA_DIR;
   if (process.platform === "win32") {
     return path.join(process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming"), "9router");

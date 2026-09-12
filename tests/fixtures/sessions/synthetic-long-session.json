@@ -1,0 +1,31 @@
+{
+ "fixture_id": "synthetic-long-session",
+ "label": "synthetic",
+ "is_captured_http_traffic": false,
+ "workload": "One long multi-turn session: 41 requests, 81 messages, no boundary anywhere",
+ "source": {
+  "kind": "handwritten",
+  "note": "Mechanical growth, written as one repeated append so that every message id is visibly distinct. The point of the fixture is duration: the digest chain, the extension proof and the turn index must stay correct deep into a session, not just on turn two."
+ },
+ "project_root": "/repo/dxrouter",
+ "protocol": "openai",
+ "model": "gpt-x",
+ "layer_sets": {
+  "long": {
+   "system": "You are a coding agent working in one repository for a long session. Keep going until the task is finished.",
+   "tools": [
+    { "type": "function", "function": { "name": "read_file", "parameters": { "type": "object", "properties": { "path": { "type": "string" } }, "required": ["path"] } } },
+    { "type": "function", "function": { "name": "run_tests", "parameters": { "type": "object", "properties": { "suite": { "type": "string" } }, "required": ["suite"] } } }
+   ]
+  }
+ },
+ "turns": [
+  { "layers": "long", "append": [["u", 220, "long-seed"]], "expect": { "confidence": "unknown", "source": "new", "new_session": true } },
+  {
+   "repeat": 40,
+   "append": [["a", 480, "long-a{i}"], ["u", 610, "long-u{i}"]],
+   "expect": { "confidence": "strongly_inferred", "source": "prefix_extension", "relation": "extension", "new_session": false, "same_session_as": 0 }
+  }
+ ],
+ "expected_totals": { "sessions": 1, "boundaries": 0, "false_continuations": 0, "false_splits": 0, "turns": 41 }
+}

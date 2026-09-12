@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import { getAdapter } from "../driver.js";
 import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
+import { decryptConnectionSecrets, encryptConnectionSecrets } from "../helpers/credentialCrypto.js";
 
 const OPTIONAL_FIELDS = [
   "displayName", "email", "globalPriority", "defaultModel",
@@ -12,7 +13,9 @@ const OPTIONAL_FIELDS = [
 
 function rowToConn(row) {
   if (!row) return null;
-  const extra = parseJson(row.data, {});
+  // Secret fields inside `data` are stored as AES-256-GCM envelopes; decryption
+  // is idempotent, so rows written before M0 still read correctly.
+  const extra = decryptConnectionSecrets(parseJson(row.data, {}));
   return {
     ...extra,
     id: row.id,
@@ -29,6 +32,9 @@ function rowToConn(row) {
 
 function connToRow(c) {
   const { id, provider, authType, name, email, priority, isActive, createdAt, updatedAt, ...rest } = c;
+  // Encrypt on the way out so plaintext credentials never reach the database
+  // file (or its WAL, or a backup copy of either).
+  const data = stringifyJson(encryptConnectionSecrets(rest));
   return {
     id,
     provider,
@@ -37,7 +43,7 @@ function connToRow(c) {
     email: email ?? null,
     priority: priority ?? null,
     isActive: isActive === false ? 0 : 1,
-    data: stringifyJson(rest),
+    data,
     createdAt,
     updatedAt,
   };

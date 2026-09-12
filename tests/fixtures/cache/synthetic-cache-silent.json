@@ -1,0 +1,26 @@
+{
+ "fixture_id": "synthetic-cache-silent",
+ "label": "synthetic",
+ "is_captured_http_traffic": false,
+ "workload": "silent provider: reports input/output only, never mentions its cache",
+ "project_kind": "silent-provider",
+ "source": {
+  "kind": "handwritten",
+  "note": "PROVENANCE. Hand-written. The point of this fixture is the ABSENCE of cache fields: every turn reports input and output and says nothing about a cache, which is what most upstreams in this router actually do. It exists so the silent path is exercised and so coverage can report a population whose cache economics would rest on `assumed` alone. It establishes nothing about any real provider."
+ },
+ "project_root": "/repo/cache-fixture",
+ "protocol": "openai",
+ "model": "gpt-5",
+ "layer_sets": {
+  "plain": {
+   "system": "You are a helpful assistant. Answer concisely and cite the file you read when you make a claim about the repository. Do not speculate about code you have not opened.",
+   "tools": null
+  }
+ },
+ "turns": [
+  { "layers": "plain", "append": [["u", 1100, "cs-u0"]], "usage": { "input": 380, "output": 120 } },
+  { "append": [["a", 700, "cs-a0"], ["u", 1300, "cs-u1"]], "usage": { "input": 900, "output": 160 } },
+  { "append": [["a", 600, "cs-a1"], ["u", 900, "cs-u2"]], "usage": { "input": 1300, "output": 140 } },
+  { "append": [["a", 540, "cs-a2"], ["u", 2000, "cs-u3"]], "usage": { "input": 1950, "output": 220 } }
+ ]
+}

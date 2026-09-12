@@ -1,6 +1,7 @@
 // Public API barrel — all DB functions
 import { getAdapter } from "./driver.js";
 import { stringifyJson, parseJson } from "./helpers/jsonCol.js";
+import { encryptConnectionSecrets } from "./helpers/credentialCrypto.js";
 
 // Settings
 export {
@@ -74,6 +75,11 @@ export async function exportDb() {
 
   const out = {
     settings: await exportSettings(),
+    // Connection secrets are exported as their stored `dxr1:` envelopes, never
+    // decrypted: a backup file is exactly as sensitive as the database it came
+    // from, and an export that carries plaintext tokens defeats encrypting them
+    // at rest. Restoring on a machine with a different master key therefore needs
+    // those connections re-authenticated (documented M0 behaviour change).
     providerConnections: db.all(`SELECT * FROM providerConnections`).map((r) => ({ ...parseJson(r.data, {}), id: r.id, provider: r.provider, authType: r.authType, name: r.name, email: r.email, priority: r.priority, isActive: r.isActive === 1, createdAt: r.createdAt, updatedAt: r.updatedAt })),
     providerNodes: db.all(`SELECT * FROM providerNodes`).map((r) => ({ ...parseJson(r.data, {}), id: r.id, type: r.type, name: r.name, createdAt: r.createdAt, updatedAt: r.updatedAt })),
     proxyPools: db.all(`SELECT * FROM proxyPools`).map((r) => ({ ...parseJson(r.data, {}), id: r.id, isActive: r.isActive === 1, testStatus: r.testStatus, createdAt: r.createdAt, updatedAt: r.updatedAt })),
@@ -116,9 +122,13 @@ export async function importDb(payload) {
 
     for (const c of payload.providerConnections || []) {
       const { id, provider, authType, name, email, priority, isActive, createdAt, updatedAt, ...rest } = c;
+      // Import is a write path like any other, so it encrypts too. An export taken
+      // from a post-M0 install already carries `dxr1:` envelopes and passes through
+      // untouched (encryption is idempotent); a legacy plaintext export is encrypted
+      // on the way in rather than landing plaintext in the database file.
       db.run(
         `INSERT OR REPLACE INTO providerConnections(id, provider, authType, name, email, priority, isActive, data, createdAt, updatedAt) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [id, provider, authType || "oauth", name || null, email || null, priority || null, isActive === false ? 0 : 1, stringifyJson(rest), createdAt || new Date().toISOString(), updatedAt || new Date().toISOString()]
+        [id, provider, authType || "oauth", name || null, email || null, priority || null, isActive === false ? 0 : 1, stringifyJson(encryptConnectionSecrets(rest)), createdAt || new Date().toISOString(), updatedAt || new Date().toISOString()]
       );
     }
     for (const n of payload.providerNodes || []) {

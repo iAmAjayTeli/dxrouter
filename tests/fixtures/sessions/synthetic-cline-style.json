@@ -1,0 +1,43 @@
+{
+ "fixture_id": "synthetic-cline-style",
+ "label": "synthetic",
+ "is_captured_http_traffic": false,
+ "workload": "Cline / Roo / Aider style: XML-ish tool protocol in the system prompt, one tool per turn, and a client that rewrites history mid-conversation",
+ "source": {
+  "kind": "handwritten",
+  "note": "Shaped after the published tool protocol of Cline-family agents (a single tool call per message, tool results fed back as user turns). No captured bytes, no copied prose."
+ },
+ "project_root": "/repo/dxrouter",
+ "protocol": "openai",
+ "model": "gpt-x",
+ "layer_sets": {
+  "cline": {
+   "system": "You are a highly skilled software engineer. You accomplish tasks one step at a time, using exactly one tool per message, and wait for the result before continuing. Tool use is formatted with XML tags. Always read a file before editing it.",
+   "tools": [
+    { "type": "function", "function": { "name": "execute_command", "description": "Run a CLI command on the user's system", "parameters": { "type": "object", "properties": { "command": { "type": "string" }, "requires_approval": { "type": "boolean" } }, "required": ["command"] } } },
+    { "type": "function", "function": { "name": "read_file", "description": "Read the contents of a file at the given path", "parameters": { "type": "object", "properties": { "path": { "type": "string" } }, "required": ["path"] } } },
+    { "type": "function", "function": { "name": "write_to_file", "description": "Write full content to a file, creating directories as needed", "parameters": { "type": "object", "properties": { "path": { "type": "string" }, "content": { "type": "string" } }, "required": ["path", "content"] } } },
+    { "type": "function", "function": { "name": "replace_in_file", "description": "Apply SEARCH/REPLACE blocks to a file", "parameters": { "type": "object", "properties": { "path": { "type": "string" }, "diff": { "type": "string" } }, "required": ["path", "diff"] } } },
+    { "type": "function", "function": { "name": "ask_followup_question", "description": "Ask the user a clarifying question", "parameters": { "type": "object", "properties": { "question": { "type": "string" } }, "required": ["question"] } } }
+   ]
+  }
+ },
+ "turns": [
+  { "layers": "cline", "append": [["u", 260, "cl-u0"]], "expect": { "confidence": "unknown", "source": "new", "new_session": true, "boundary": null } },
+  { "append": [["a", 300, "cl-a0"], ["u", 1800, "cl-u1"]], "expect": { "confidence": "strongly_inferred", "source": "prefix_extension", "relation": "extension", "new_session": false, "same_session_as": 0 } },
+  { "append": [["a", 340, "cl-a1"], ["u", 2600, "cl-u2"]], "expect": { "confidence": "strongly_inferred", "source": "prefix_extension", "relation": "extension", "new_session": false, "same_session_as": 0 } },
+  { "append": [["a", 410, "cl-a2"], ["u", 900, "cl-u3"]], "expect": { "confidence": "strongly_inferred", "source": "prefix_extension", "relation": "extension", "new_session": false, "same_session_as": 0 } },
+  {
+   "comment": "The client edited a historical message (a retry with a corrected earlier prompt). Same length, same position, different content: this is NOT the same conversation, and joining it would be a false continuation.",
+   "mutate": { "index": 1, "message": ["a", 300, "cl-a0-edited"] },
+   "expect": { "confidence": "unknown", "source": "new", "new_session": true, "boundary": null, "different_session_from": 0, "notes_include": "candidates_all_divergent" }
+  },
+  { "append": [["a", 500, "cl-a4"], ["u", 700, "cl-u5"]], "expect": { "confidence": "strongly_inferred", "source": "prefix_extension", "relation": "extension", "new_session": false, "same_session_as": 4, "different_session_from": 0 } },
+  {
+   "comment": "And a reorder of two prior messages, which is equally not a continuation.",
+   "reorder": [1, 2],
+   "expect": { "confidence": "unknown", "source": "new", "new_session": true, "different_session_from": 4 }
+  }
+ ],
+ "expected_totals": { "sessions": 3, "boundaries": 0, "false_continuations": 0, "false_splits": 0 }
+}

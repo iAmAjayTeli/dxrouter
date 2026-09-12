@@ -1,0 +1,7 @@
+provider: deepseek
+mechanism: none
+reports_cache_read: true
+verification_method: documentation
+source: "https://api-docs.deepseek.com/guides/kv_cache"
+version: 1
+notes: "Context caching is automatic and the response reports prompt_cache_hit_tokens / prompt_cache_miss_tokens, so cache reads are observable evidence. No TTL is documented (the docs say entries are cleared after a period of disuse), and inventing one is forbidden, so no economics are claimed until cache_probe measures it (Q1)."

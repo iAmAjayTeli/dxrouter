@@ -1,6 +1,9 @@
 import path from "node:path";
 import fs from "node:fs";
-import { DATA_DIR } from "@/lib/dataDir.js";
+// Relative, not `@/lib/dataDir.js`: this module is also imported by bare-node entry
+// points (the `dxrouter` CLI) that have no bundler to resolve the alias. Same file,
+// same single resolver either way.
+import { DATA_DIR } from "../dataDir.js";
 
 export const DB_DIR = path.join(DATA_DIR, "db");
 export const DATA_FILE = path.join(DB_DIR, "data.sqlite");

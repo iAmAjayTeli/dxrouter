@@ -40,6 +40,9 @@ const DEFAULT_SETTINGS = {
   samlAttributeEmail: "email",
   samlAttributeName: "name",
   enableObservability: false,
+  // Diagnostics may record the shape of a request; persisting the prompt and the
+  // completion themselves is a separate, explicit opt-in (M0).
+  persistRequestBodies: false,
   observabilityMaxRecords: 1000,
   observabilityBatchSize: 20,
   observabilityFlushIntervalMs: 5000,

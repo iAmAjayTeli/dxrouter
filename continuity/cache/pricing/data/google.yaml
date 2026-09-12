@@ -1,0 +1,7 @@
+provider: google
+mechanism: none
+reports_cache_read: true
+verification_method: documentation
+source: "https://ai.google.dev/gemini-api/docs/caching"
+version: 1
+notes: "Two documented modes, neither usable as a verified model here. Implicit caching reports cachedContentTokenCount and discounts those tokens, but its lifetime is explicitly not guaranteed, and a guessed TTL is forbidden (§9.3). Explicit context caching has a documented TTL and storage price per hour, but requires a CachedContent API call the engine does not make. So: zero claimed economics, while still recording provider-reported cache reads as evidence."

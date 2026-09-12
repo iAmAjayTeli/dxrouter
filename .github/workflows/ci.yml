@@ -1,0 +1,71 @@
+# M0 continuous integration.
+#
+# The invariant this file exists for is I1: the continuity engine must never
+# import 9Router. That is enforced here rather than in code review, because a
+# forbidden import keeps working perfectly at runtime — it only destroys the
+# ability to move the engine, so nothing but a failing build will catch it.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  boundary:
+    name: I1 import boundary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # No install step on purpose: the checker is dependency-free so the
+      # boundary is still enforced even if the dependency tree is broken.
+      - run: node scripts/check-import-boundary.mjs --root continuity
+
+  m0-tests:
+    name: M0 tests (security, continuity, protocol)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # Root deps first: the tests import from src/, which needs the app's
+      # runtime dependencies. `better-sqlite3` is optional — the driver chain
+      # falls back to node:sqlite, so a missing native build must not fail CI.
+      - run: npm ci --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund --prefix tests
+      - run: npm run test:m0
+        env:
+          # Deterministic key so credential-at-rest assertions do not depend on a
+          # keychain the runner does not have.
+          DXR_MASTER_KEY: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+
+  lint:
+    name: eslint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      # Hard gate on the code M0 owns. Scoped rather than repo-wide because the
+      # inherited dashboard carries 135 pre-existing eslint errors (react-hooks
+      # rules, mostly setState-in-effect); a job that is red on arrival teaches
+      # everyone to ignore it. `--max-warnings 0` is deliberately not set: the
+      # migration files inherit `import/no-anonymous-default-export` from the
+      # 001-initial.js they sit beside, and matching the neighbours beats a
+      # local exception.
+      - name: eslint (M0 footprint, must pass)
+        run: npx eslint continuity adapters scripts src/lib/security src/lib/db src/lib/dxr src/lib/dataDir.js src/dashboardGuard.js src/instrumentation.js
+      # Whole-repo lint stays visible but advisory until the inherited debt is
+      # paid down. Do not fold this into the gate above without fixing them.
+      - name: eslint (whole repo, advisory)
+        continue-on-error: true
+        run: npx eslint .

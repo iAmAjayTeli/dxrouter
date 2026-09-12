@@ -46,6 +46,10 @@ next-env.d.ts
 
 .bin/*
 data/
+# Pricing fixtures are source, not runtime data. A bare `data/` excludes the
+# directory itself, and an excluded directory is never descended into, so the
+# file-level negation has to name the directory to have any effect.
+!continuity/cache/pricing/data/
 logs/*
 source/*
 .cursor/*

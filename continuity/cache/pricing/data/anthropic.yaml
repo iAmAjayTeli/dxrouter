@@ -1,0 +1,17 @@
+provider: anthropic
+mechanism: explicit
+breakpoints: 4
+min_cacheable_tokens: 1024
+ttl_default_s: 300
+ttl_extended_s: 3600
+write_multiplier_default: 1.25
+write_multiplier_extended: 2.0
+read_multiplier: 0.1
+reports_cache_read: true
+reports_cache_write: true
+verification_method: documentation
+verified_at: 2026-05-01
+verified_by: "vendor documentation (docs.anthropic.com prompt caching), read at the model knowledge cutoff"
+source: "https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching"
+version: 1
+notes: "min_cacheable_tokens is the lower of the documented per-model minimums (1024; some smaller models require 2048), so the record understates eligibility rather than overstating it. Not measured in this workspace."

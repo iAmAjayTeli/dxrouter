@@ -1,0 +1,44 @@
+{
+ "fixture_id": "synthetic-compaction-keyed",
+ "label": "synthetic",
+ "is_captured_http_traffic": false,
+ "workload": "The same compaction, from a client that sends X-DXR-Session: the predecessor is closed with a reason and a successor records its lineage",
+ "source": {
+  "kind": "handwritten",
+  "note": "Written by hand. The only difference from synthetic-compaction is the header, and the difference in outcome is the whole point: lineage across a compaction is knowable only when the client says so."
+ },
+ "project_root": "/repo/dxrouter",
+ "protocol": "openai",
+ "model": "gpt-x",
+ "layer_sets": {
+  "comp": {
+   "system": "You are a coding agent. When the conversation grows too long it is summarized and you continue from the summary.",
+   "tools": [
+    { "type": "function", "function": { "name": "read_file", "parameters": { "type": "object", "properties": { "path": { "type": "string" } }, "required": ["path"] } } },
+    { "type": "function", "function": { "name": "edit_file", "parameters": { "type": "object", "properties": { "path": { "type": "string" }, "diff": { "type": "string" } }, "required": ["path", "diff"] } } }
+   ]
+  }
+ },
+ "turns": [
+  { "layers": "comp", "key": "cc-keyed-1", "append": [["u", 900, "kc-u0"]], "expect": { "confidence": "explicit", "source": "header", "new_session": true, "notes_include": "explicit_key_first_seen" } },
+  { "key": "cc-keyed-1", "append": [["a", 6100, "kc-a0"], ["u", 9400, "kc-u1"]], "expect": { "confidence": "explicit", "source": "header", "relation": "extension", "new_session": false, "same_session_as": 0 } },
+  { "key": "cc-keyed-1", "append": [["a", 7300, "kc-a1"], ["u", 16800, "kc-u2"]], "expect": { "confidence": "explicit", "source": "header", "relation": "extension", "new_session": false, "same_session_as": 0 } },
+  {
+   "comment": "Compaction with the key present: the predecessor is closed as client_compaction_suspected and the successor records predecessor_id. Identity stays explicit because the key is still honoured.",
+   "key": "cc-keyed-1",
+   "reset": [["u", 3800, "kc-summary"], ["u", 280, "kc-u3"]],
+   "expect": {
+    "confidence": "explicit",
+    "source": "header",
+    "relation": "shortened",
+    "new_session": true,
+    "boundary": "client_compaction_suspected",
+    "closes_predecessor": true,
+    "predecessor_is": 0,
+    "different_session_from": 0
+   }
+  },
+  { "key": "cc-keyed-1", "append": [["a", 900, "kc-a3"], ["u", 420, "kc-u4"]], "expect": { "confidence": "explicit", "source": "header", "relation": "extension", "new_session": false, "same_session_as": 3 } }
+ ],
+ "expected_totals": { "sessions": 2, "boundaries": 1, "false_continuations": 0, "false_splits": 0, "closed_sessions": 1 }
+}

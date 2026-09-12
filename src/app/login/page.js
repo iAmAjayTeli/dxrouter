@@ -251,7 +251,8 @@ export default function LoginPage() {
                 </Button>
 
                 <p className="text-xs text-center text-text-muted mt-2">
-                  Default password is <code className="bg-sidebar px-1 rounded">123456</code>
+                  First run? The generated credential is printed to the server console and
+                  written to <code className="bg-sidebar px-1 rounded">initial-credential.txt</code> in the data directory.
                 </p>
                 {hasPassword === false && (
                   <p className="text-xs text-center text-amber-600 dark:text-amber-400">

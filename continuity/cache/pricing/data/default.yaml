@@ -1,0 +1,7 @@
+# The invariant entry, not provider data. Two lines of meaning: no mechanism, no
+# claims. If this file fails to load the loader synthesizes it in memory and logs an
+# error rather than exiting (§9.3).
+provider: default
+mechanism: none
+version: 1
+notes: "Fallback for any provider without its own record. Contributes zero cache economics (I4)."

@@ -6,8 +6,6 @@ import crypto from "node:crypto";
 import { DATA_DIR } from "@/lib/dataDir";
 import { getSettings } from "@/lib/localDb";
 
-const DEFAULT_PASSWORD = "123456";
-
 function loadJwtSecret() {
   if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
   const file = path.join(DATA_DIR, "jwt-secret");
@@ -72,11 +70,16 @@ export function clearDashboardAuthCookie(cookieStore) {
 }
 
 // Verify the current dashboard password (re-auth for sensitive actions).
+//
+// M0: there is no default password. A stored bcrypt hash is the only accepted
+// credential; an explicit INITIAL_PASSWORD is honoured only until the first-run
+// bootstrap has written its hash. No hash and no INITIAL_PASSWORD means the
+// bootstrap has not run yet, and nothing authenticates.
 export async function verifyDashboardPassword(password) {
   if (typeof password !== "string" || !password) return false;
   const settings = await getSettings();
   const storedHash = settings?.password;
   if (storedHash) return bcrypt.compare(password, storedHash);
-  const initialPassword = process.env.INITIAL_PASSWORD || DEFAULT_PASSWORD;
-  return password === initialPassword;
+  if (process.env.INITIAL_PASSWORD) return password === process.env.INITIAL_PASSWORD;
+  return false;
 }

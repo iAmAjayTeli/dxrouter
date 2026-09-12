@@ -109,7 +109,14 @@ PORT=20128 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run dev
 
 ```bash
 npm run build
-PORT=20128 HOSTNAME=0.0.0.0 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run start
+PORT=20128 HOSTNAME=127.0.0.1 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run start
+```
+
+若需从其他机器访问，必须显式开启；否则非回环绑定会拒绝启动，因为这会把 LLM API
+和所有已保存的提供商凭据暴露出去：
+
+```bash
+DXR_ALLOW_NETWORK=1 PORT=20128 HOSTNAME=0.0.0.0 npm run start
 ```
 
 默认 URL：
@@ -1033,6 +1040,7 @@ export INITIAL_PASSWORD="your-password"
 export DATA_DIR="/var/lib/9router"
 export PORT="20128"
 export HOSTNAME="0.0.0.0"
+export DXR_ALLOW_NETWORK="1"   # 任何非回环绑定都必需；请保持认证开启
 export NODE_ENV="production"
 export NEXT_PUBLIC_BASE_URL="http://localhost:20128"
 export NEXT_PUBLIC_CLOUD_URL="https://9router.com"
@@ -1058,28 +1066,34 @@ docker build -t 9router .
 # 运行容器（当前设置使用的命令）
 docker run -d \
   --name 9router \
-  -p 20128:20128 \
+  -p 127.0.0.1:20128:20128 \
   --env-file /root/dev/9router/.env \
   -v 9router-data:/app/data \
-  -v 9router-usage:/root/.9router \
+  -e DXR_DATA_DIR=/app/data \
+  -e DXR_ALLOW_NETWORK=1 \
   9router
 ```
+
+容器内部绑定 `0.0.0.0`，因此需要 `DXR_ALLOW_NETWORK=1`；把发布端口限制在
+`127.0.0.1:` 可避免把网关暴露到局域网。请在 `.env` 中提供 `DXR_MASTER_KEY`
+（`openssl rand -hex 32`）以加密落盘的提供商凭据。
 
 便携命令（如果你已经在仓库根目录）：
 
 ```bash
 docker run -d \
   --name 9router \
-  -p 20128:20128 \
+  -p 127.0.0.1:20128:20128 \
   --env-file ./.env \
   -v 9router-data:/app/data \
-  -v 9router-usage:/root/.9router \
+  -e DXR_DATA_DIR=/app/data \
+  -e DXR_ALLOW_NETWORK=1 \
   9router
 ```
 
 容器默认值：
 - `PORT=20128`
-- `HOSTNAME=0.0.0.0`
+- `HOSTNAME=0.0.0.0`（容器需要绑定全部网卡，因此请加 `-e DXR_ALLOW_NETWORK=1`，并保持控制面板登录与 API Key 校验开启）
 
 常用命令：
 
@@ -1094,10 +1108,13 @@ docker stop 9router && docker rm 9router
 | 变量 | 默认值 | 描述 |
 |----------|---------|-------------|
 | `JWT_SECRET` | 自动生成（`~/.9router/jwt-secret`） | 用于控制面板 auth cookie 的 JWT 签名密钥（设置可在多实例间共享） |
-| `INITIAL_PASSWORD` | `123456` | 当没有保存的哈希时首次登录的密码 |
+| `INITIAL_PASSWORD` | _(无)_ | 可选的首次登录密码。建议不设置：首次启动会生成随机凭据并只打印一次。**自 M0 起没有默认密码。** |
+| `DXR_DATA_DIR` | `%APPDATA%/9router` \| `~/.9router` | 唯一数据根目录（数据库、备份、密钥、日志）；`DATA_DIR` 为已弃用的写法 |
+| `DXR_MASTER_KEY` | 操作系统钥匙串 | 64 位十六进制（或 32 字节 base64），用于加密落盘的提供商凭据。若既无此变量又无可用钥匙串，服务器将拒绝启动（参见 `DXR_KEY_STORE=file`） |
+| `DXR_ALLOW_NETWORK` | `0` | 绑定非回环地址所必需。未设置时，非回环 `HOSTNAME` 将拒绝启动 |
 | `DATA_DIR` | `~/.9router` | 主应用数据库位置（`db.json`） |
 | `PORT` | 框架默认值 | 服务端口（示例中为 `20128`） |
-| `HOSTNAME` | 框架默认值 | 绑定主机（Docker 默认为 `0.0.0.0`） |
+| `HOSTNAME` | 回环地址 | 绑定主机。非回环地址需要 `DXR_ALLOW_NETWORK=1`（Docker：`0.0.0.0` 加该开关） |
 | `NODE_ENV` | 运行时默认值 | 设置 `production` 用于部署 |
 | `BASE_URL` | `http://localhost:20128` | 云同步任务使用的服务端内部基础 URL |
 | `CLOUD_URL` | `https://9router.com` | 服务端云同步端点基础 URL |
@@ -1218,8 +1235,10 @@ docker stop 9router && docker rm 9router
 - 设置 `PORT=20128` 和 `NEXT_PUBLIC_BASE_URL=http://localhost:20128`
 
 **首次登录不工作**
-- 检查 `.env` 中的 `INITIAL_PASSWORD`
-- 如果未设置，回退密码是 `123456`
+- 自 M0 起**没有默认密码**。首次启动会打印一次生成的凭据，并写入
+  `<数据根目录>/initial-credential.txt`；首次成功登录后该文件会被删除。
+  丢失了？运行 `9router` → 设置 → “重置密码（生成新的）”。
+- 想自己指定首次密码，请在首次启动前于 `.env` 中设置 `INITIAL_PASSWORD`。
 
 **`logs/` 下没有请求日志**
 - 设置 `ENABLE_REQUEST_LOGS=true`

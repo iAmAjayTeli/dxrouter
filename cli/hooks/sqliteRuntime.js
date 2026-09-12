@@ -16,6 +16,8 @@ const BETTER_SQLITE3_VERSION = USE_NAPI_BUILD ? "13.0.3" : "12.6.2";
 const SQL_JS_VERSION = "1.14.1";
 
 function getDataDir() {
+  // Same precedence as src/lib/dataDir.js — one data root, no alternates.
+  if (process.env.DXR_DATA_DIR) return process.env.DXR_DATA_DIR;
   if (process.env.DATA_DIR) return process.env.DATA_DIR;
   return process.platform === "win32"
     ? path.join(process.env.APPDATA || os.homedir(), "9router")

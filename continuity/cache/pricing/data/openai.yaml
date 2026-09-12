@@ -1,0 +1,14 @@
+provider: openai
+mechanism: implicit
+min_cacheable_tokens: 1024
+ttl_default_s: 300
+write_multiplier_default: 1.0
+read_multiplier: 0.5
+reports_cache_read: true
+reports_cache_write: false
+verification_method: documentation
+verified_at: 2026-05-01
+verified_by: "vendor documentation (platform.openai.com prompt caching), read at the model knowledge cutoff"
+source: "https://platform.openai.com/docs/guides/prompt-caching"
+version: 1
+notes: "Automatic caching: no write surcharge, no breakpoints, and the read discount varies by model family. read_multiplier is the least favourable documented value, so the record understates the benefit. ttl_default_s is the documented lower bound of the inactivity window; the upper bound is not contractual. Reports cached prompt tokens only (no write field)."

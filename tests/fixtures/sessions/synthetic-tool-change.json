@@ -1,0 +1,57 @@
+{
+ "fixture_id": "synthetic-tool-change",
+ "label": "synthetic",
+ "is_captured_http_traffic": false,
+ "workload": "A mid-session tool-set change and then a system-prompt change, both of which end the prefix",
+ "source": {
+  "kind": "handwritten",
+  "note": "Written by hand. Real agents do this when a user enables an MCP server mid-session (tools grow) or switches mode (system prompt changes); a transcript cannot supply it, because a transcript records neither layer."
+ },
+ "project_root": "/repo/dxrouter",
+ "protocol": "openai",
+ "model": "gpt-x",
+ "layer_sets": {
+  "base": {
+   "system": "You are a coding agent working in one repository.",
+   "tools": [
+    { "type": "function", "function": { "name": "read_file", "parameters": { "type": "object", "properties": { "path": { "type": "string" } }, "required": ["path"] } } },
+    { "type": "function", "function": { "name": "edit_file", "parameters": { "type": "object", "properties": { "path": { "type": "string" }, "diff": { "type": "string" } }, "required": ["path", "diff"] } } }
+   ]
+  },
+  "more_tools": {
+   "system": "You are a coding agent working in one repository.",
+   "tools": [
+    { "type": "function", "function": { "name": "read_file", "parameters": { "type": "object", "properties": { "path": { "type": "string" } }, "required": ["path"] } } },
+    { "type": "function", "function": { "name": "edit_file", "parameters": { "type": "object", "properties": { "path": { "type": "string" }, "diff": { "type": "string" } }, "required": ["path", "diff"] } } },
+    { "type": "function", "function": { "name": "query_database", "parameters": { "type": "object", "properties": { "sql": { "type": "string" } }, "required": ["sql"] } } }
+   ]
+  },
+  "new_system": {
+   "system": "You are a code REVIEWER. Do not modify files; report findings only.",
+   "tools": [
+    { "type": "function", "function": { "name": "read_file", "parameters": { "type": "object", "properties": { "path": { "type": "string" } }, "required": ["path"] } } },
+    { "type": "function", "function": { "name": "edit_file", "parameters": { "type": "object", "properties": { "path": { "type": "string" }, "diff": { "type": "string" } }, "required": ["path", "diff"] } } },
+    { "type": "function", "function": { "name": "query_database", "parameters": { "type": "object", "properties": { "sql": { "type": "string" } }, "required": ["sql"] } } }
+   ]
+  }
+ },
+ "turns": [
+  { "layers": "base", "append": [["u", 300, "tc-u0"]], "expect": { "confidence": "unknown", "source": "new", "new_session": true } },
+  { "append": [["a", 700, "tc-a0"], ["u", 900, "tc-u1"]], "expect": { "confidence": "strongly_inferred", "source": "prefix_extension", "new_session": false, "same_session_as": 0 } },
+  {
+   "comment": "An MCP server came online: the tools array grew. The messages are still a perfect prefix extension, and it still is NOT the same prefix, because the tools layer sits above them.",
+   "layers": "more_tools",
+   "append": [["a", 640, "tc-a1"], ["u", 850, "tc-u2"]],
+   "expect": { "confidence": "unknown", "source": "new", "new_session": true, "boundary": null, "different_session_from": 0, "relation": "indeterminate", "notes": [] }
+  },
+  { "append": [["a", 520, "tc-a2"], ["u", 770, "tc-u3"]], "expect": { "confidence": "strongly_inferred", "source": "prefix_extension", "new_session": false, "same_session_as": 2, "different_session_from": 0 } },
+  {
+   "comment": "Now the system prompt changes with the tools held constant, which invalidates system and everything below it.",
+   "layers": "new_system",
+   "append": [["a", 480, "tc-a3"], ["u", 660, "tc-u4"]],
+   "expect": { "confidence": "unknown", "source": "new", "new_session": true, "boundary": null, "different_session_from": 2, "relation": "indeterminate", "notes": [] }
+  },
+  { "append": [["a", 450, "tc-a4"], ["u", 610, "tc-u5"]], "expect": { "confidence": "strongly_inferred", "source": "prefix_extension", "new_session": false, "same_session_as": 4 } }
+ ],
+ "expected_totals": { "sessions": 3, "boundaries": 0, "false_continuations": 0, "false_splits": 0 }
+}

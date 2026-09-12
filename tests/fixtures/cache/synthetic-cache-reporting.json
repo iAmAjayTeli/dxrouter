@@ -1,0 +1,33 @@
+{
+ "fixture_id": "synthetic-cache-reporting",
+ "label": "synthetic",
+ "is_captured_http_traffic": false,
+ "expectation_basis": "engine_estimator",
+ "workload": "cache-reporting provider: stable tools+system front, growing message tail, provider reports cache_read/cache_write every turn",
+ "project_kind": "cache-reporting-provider",
+ "source": {
+  "kind": "handwritten",
+  "note": "PROVENANCE, read this before trusting any number derived from it. The per-turn usage blocks below are HAND-COMPUTED. No provider produced them and no HTTP traffic was captured. They are what an explicit-breakpoint provider with a 1024-token minimum WOULD report given this fixture's own declared byte counts, evaluated with the engine's own bytes/4 estimator: turn 0 caches nothing because the whole prefix is 560 tokens and below the minimum; turn 1 writes the full 1076-token prefix and reads nothing; every later turn reads back what the previous turn wrote and writes only the delta. Because the expectation and the prediction come from the same token estimator, an arithmetic-accuracy run over this fixture is a SELF-CONSISTENCY CHECK: it catches an attribution, carry or prefix-region bug, and it cannot validate the vendor cache model or establish section 20's 5-percent band, which is defined against counts providers actually reported."
+ },
+ "project_root": "/repo/cache-fixture",
+ "protocol": "claude",
+ "model": "claude-opus-5",
+ "layer_sets": {
+  "stable": {
+   "system": "You are a coding assistant operating inside a repository. Read files before editing them. Prefer the smallest change that satisfies the request. Never invent an API. When a build or test command exists, run it before reporting success. Explain a decision only when the decision is not obvious from the diff. Keep responses short. This block is deliberately long enough to sit above a provider minimum cacheable prefix on its own.",
+   "tools": [
+    { "name": "Read", "description": "Read a file from the local filesystem", "input_schema": { "type": "object", "properties": { "file_path": { "type": "string" }, "limit": { "type": "number" } }, "required": ["file_path"] } },
+    { "name": "Edit", "description": "Perform exact string replacement in a file", "input_schema": { "type": "object", "properties": { "file_path": { "type": "string" }, "old_string": { "type": "string" }, "new_string": { "type": "string" } }, "required": ["file_path", "old_string", "new_string"] } },
+    { "name": "Bash", "description": "Execute a shell command and return its output", "input_schema": { "type": "object", "properties": { "command": { "type": "string" }, "timeout": { "type": "number" } }, "required": ["command"] } },
+    { "name": "Grep", "description": "Search file contents with a regular expression", "input_schema": { "type": "object", "properties": { "pattern": { "type": "string" }, "glob": { "type": "string" } }, "required": ["pattern"] } }
+   ]
+  }
+ },
+ "turns": [
+  { "layers": "stable", "append": [["u", 900, "cr-u0"]], "usage": { "input": 560, "output": 210, "cache_read": 0, "cache_write": 0 } },
+  { "append": [["a", 800, "cr-a0"], ["u", 1200, "cr-u1"]], "usage": { "input": 1076, "output": 260, "cache_read": 0, "cache_write": 1076 } },
+  { "append": [["a", 640, "cr-a1"], ["u", 2400, "cr-u2"]], "usage": { "input": 1851, "output": 300, "cache_read": 1076, "cache_write": 775 } },
+  { "append": [["a", 520, "cr-a2"], ["u", 700, "cr-u3"]], "usage": { "input": 2172, "output": 180, "cache_read": 1851, "cache_write": 321 } },
+  { "append": [["a", 480, "cr-a3"], ["u", 1600, "cr-u4"]], "usage": { "input": 2708, "output": 240, "cache_read": 2172, "cache_write": 536 } }
+ ]
+}

@@ -10,9 +10,20 @@ services:
     env_file:
       - .env
     environment:
-      DATA_DIR: /app/data
+      DXR_DATA_DIR: /app/data
       PORT: "20128"
       HOSTNAME: "0.0.0.0"
+      # A container has to bind all interfaces for `ports:` to work, and the
+      # server refuses a non-loopback bind without this opt-in. Publishing 20128
+      # exposes the LLM API and every stored provider credential to whatever can
+      # reach this host, so keep dashboard login and API-key checks enabled, and
+      # bind the published port to 127.0.0.1 ("127.0.0.1:20128:20128") unless
+      # remote access is actually wanted.
+      DXR_ALLOW_NETWORK: "1"
+      # Encrypts provider credentials at rest. Put a 64-hex-character value in
+      # .env (openssl rand -hex 32); without it, and with no OS keychain in the
+      # container, the server refuses to start.
+      DXR_MASTER_KEY: "${DXR_MASTER_KEY}"
       NODE_ENV: production
       HEADROOM_URL: http://headroom:8787
     depends_on:

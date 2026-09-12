@@ -63,11 +63,32 @@ describe("dashboard guard public LLM API access", () => {
     mocks.verifyDashboardAuthToken.mockResolvedValue(false);
   });
 
-  it("allows loopback public LLM API without API key", async () => {
+  // M0 intentional change from upstream: a loopback peer no longer gets the LLM
+  // API for free. Upstream allowed any local caller to spend every stored
+  // provider credential without presenting anything, so anything else running on
+  // the machine was implicitly trusted. The three tests below assert the new
+  // default and the one explicit opt-out that still exists.
+  it("requires an API key on loopback too", async () => {
+    const response = await proxy(localRequest("/v1/chat/completions", { host: "localhost:20128" }));
+
+    expect(response.status).toBe(401);
+    expect(mocks.validateApiKey).not.toHaveBeenCalled(); // no key was presented to validate
+  });
+
+  it("allows loopback without a key only when the operator opted out", async () => {
+    mocks.getSettings.mockResolvedValue({ requireLogin: true, requireApiKey: false });
+
     const response = await proxy(localRequest("/v1/chat/completions", { host: "localhost:20128" }));
 
     expect(response).toBe(mocks.nextResponse);
-    expect(mocks.validateApiKey).not.toHaveBeenCalled();
+  });
+
+  it("does not extend the opt-out to a remote caller", async () => {
+    mocks.getSettings.mockResolvedValue({ requireLogin: true, requireApiKey: false });
+
+    const response = await proxy(request("/v1/chat/completions", { host: "router.example.com" }));
+
+    expect(response.status).toBe(401);
   });
 
   it("rejects remote Host-spoof when real peer IP is non-loopback", async () => {
@@ -80,14 +101,17 @@ describe("dashboard guard public LLM API access", () => {
     expect(response.body.error).toBe("API key required for remote API access");
   });
 
-  it("allows loopback peer IP regardless of Host", async () => {
+  it("accepts a loopback peer IP regardless of Host, once a key is presented", async () => {
+    mocks.validateApiKey.mockResolvedValue(true);
+
     const response = await proxy(localRequest("/v1/chat/completions", {
-      host: "localhost:20128",
+      host: "evil.example.com",
       "x-9r-real-ip": "127.0.0.1",
+      authorization: "Bearer sk-valid",
     }));
 
     expect(response).toBe(mocks.nextResponse);
-    expect(mocks.validateApiKey).not.toHaveBeenCalled();
+    expect(mocks.validateApiKey).toHaveBeenCalledWith("sk-valid");
   });
 
   it("rejects remote rewritten public LLM API without API key", async () => {
@@ -97,11 +121,11 @@ describe("dashboard guard public LLM API access", () => {
     expect(response.body.error).toBe("API key required for remote API access");
   });
 
-  it("allows loopback rewritten public LLM API without API key", async () => {
+  it("requires an API key on the loopback rewritten path too", async () => {
     const response = await proxy(localRequest("/api/v1/chat/completions", { host: "localhost:20128" }));
 
-    expect(response).toBe(mocks.nextResponse);
-    expect(mocks.validateApiKey).not.toHaveBeenCalled();
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe("API key required for remote API access");
   });
 
   it("rejects remote beta public LLM API without API key", async () => {

@@ -14,7 +14,14 @@
     "build:bun": "bun --bun next build --webpack",
     "start:bun": "bun ./.next/standalone/custom-server.js",
     "cli:pack": "npm --prefix cli run pack:cli",
-    "cli:publish": "npm --prefix cli run publish:cli"
+    "cli:publish": "npm --prefix cli run publish:cli",
+    "lint": "eslint .",
+    "lint:boundary": "node scripts/check-import-boundary.mjs --root continuity",
+    "test:m0": "npm --prefix tests run test:m0",
+    "test:security": "npm --prefix tests run test:security",
+    "test:m1": "npm --prefix tests run test:m1",
+    "test:m2": "npm --prefix tests run test:m2",
+    "dxrouter": "node scripts/dxrouter.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -61,5 +68,8 @@
     "eslint-config-next": "16.1.6",
     "postcss": "^8.5.6",
     "tailwindcss": "^4"
+  },
+  "bin": {
+    "dxrouter": "scripts/dxrouter.mjs"
   }
 }

@@ -23,6 +23,8 @@ import { detectFormatByEndpoint } from "open-sse/translator/formats.js";
 import * as log from "../utils/logger.js";
 import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.js";
 import { getProjectIdForConnection } from "open-sse/services/projectId.js";
+import { observeChatTurn } from "@/lib/dxr/sessions.js";
+import { makeProviderResultObserver } from "@/lib/dxr/cache.js";
 
 /**
  * Handle chat completion request
@@ -78,6 +80,28 @@ export async function handleChat(request, clientRawRequest = null) {
   if (!modelStr) {
     log.warn("CHAT", "Missing model");
     return errorResponse(HTTP_STATUS.BAD_REQUEST, "Missing model");
+  }
+
+  // ---- M1 continuity observation (§12). Placed after authentication so an
+  // unauthenticated caller cannot write session rows, and before routing so the turn
+  // is recorded even if every provider fails.
+  //
+  // This call is a dead end by design: it is not awaited, its return value is
+  // discarded, and it can influence nothing below it. Combo expansion, account
+  // selection, `accountFallback`, retries and provider behaviour are untouched —
+  // legacy 9Router routing remains authoritative. `DXR_SESSIONS=off` removes it.
+  try {
+    observeChatTurn({
+      body,
+      headers: request.headers,
+      pathname: clientRawRequest?.endpoint || "",
+      // M2: file the observation under this request so a provider result arriving later
+      // can find the turn it belongs to. Still not awaited, still discarded here.
+      retain: request,
+    });
+  } catch {
+    // Unreachable in practice (the module swallows its own failures); kept because a
+    // completion must never fail for an observation.
   }
 
   // Bypass naming/warmup requests before combo rotation to avoid wasting rotation slots
@@ -297,7 +321,12 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       },
       onRequestSuccess: async () => {
         await clearAccountError(credentials.connectionId, credentials, model);
-      }
+      },
+      // M2 observation only (§12). `null` when cache tracking is off, which is the same
+      // value the inherited code saw before M2 existed. It records what the provider
+      // reported about its own cache; it cannot influence this call's outcome, and its
+      // failures are swallowed inside the adapter.
+      onProviderResult: makeProviderResultObserver(request),
     });
 
     if (result.success) return result.response;

@@ -93,7 +93,21 @@ const APP_NAME = pkg.name; // Use from package.json
 const INSTALL_CMD_LATEST = `npm i -g ${APP_NAME}@latest --prefer-online`;
 
 const DEFAULT_PORT = 20128;
-const DEFAULT_HOST = "0.0.0.0";
+// Loopback by default. Binding all interfaces exposes the LLM API, the dashboard
+// and every stored provider credential to the local network, so it is opt-in
+// (DXR_ALLOW_NETWORK=1) rather than the default.
+const DEFAULT_HOST = "127.0.0.1";
+const WILDCARD_HOSTS = new Set(["0.0.0.0", "::", "[::]", "*"]);
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost", "[::1]"]);
+
+function isLoopbackHost(h) {
+  const v = String(h || "").trim().toLowerCase();
+  return LOOPBACK_HOSTS.has(v) || /^127\./.test(v);
+}
+
+function isNetworkAllowed() {
+  return /^(1|true|yes|on)$/i.test(String(process.env.DXR_ALLOW_NETWORK || "").trim());
+}
 
 // First non-internal IPv4 — the address remote peers actually reach when bound to 0.0.0.0.
 function getLanIp() {
@@ -107,7 +121,7 @@ function getLanIp() {
 
 // Local URL stays "localhost"; warn separately when bound to all interfaces (network-exposed).
 function getDisplayHost() {
-  return host === DEFAULT_HOST ? "localhost" : host;
+  return isLoopbackHost(host) || WILDCARD_HOSTS.has(String(host).toLowerCase()) ? "localhost" : host;
 }
 const MAX_PORT_ATTEMPTS = 10;
 // Identifiers for killAllAppProcesses - only kill 9router specifically
@@ -145,7 +159,8 @@ Usage: ${APP_NAME} [options]
 
 Options:
   -p, --port <port>   Port to run the server (default: ${DEFAULT_PORT})
-  -H, --host <host>   Host to bind (default: ${DEFAULT_HOST})
+  -H, --host <host>   Host to bind (default: ${DEFAULT_HOST}, loopback only)
+                      Non-loopback hosts require DXR_ALLOW_NETWORK=1
   -n, --no-browser    Don't open browser automatically
   -l, --log           Show server logs (default: hidden)
   -t, --tray          Run in system tray mode (background)
@@ -185,8 +200,12 @@ function compareVersions(a, b) {
   return 0;
 }
 
-// Get app data dir (matches app/src/lib/dataDir.js convention)
+// Get app data dir (matches app/src/lib/dataDir.js precedence exactly:
+// DXR_DATA_DIR -> DATA_DIR (deprecated) -> platform default). There must be one
+// data root; the CLI must never resolve a different one from the server.
 function getAppDataDir() {
+  if (process.env.DXR_DATA_DIR) return process.env.DXR_DATA_DIR;
+  if (process.env.DATA_DIR) return process.env.DATA_DIR;
   return process.platform === "win32"
     ? path.join(process.env.APPDATA || "", "9router")
     : path.join(os.homedir(), ".9router");
@@ -597,10 +616,39 @@ function startServer(updatePromise) {
   const latestVersionPromise = Promise.resolve(updatePromise);
   const displayHost = getDisplayHost();
   const url = `http://${displayHost}:${port}/dashboard`;
-  // Surface real network exposure when bound to all interfaces (default 0.0.0.0).
-  if (host === DEFAULT_HOST) {
+
+  // Network exposure is opt-in. Refuse rather than warn: a warning scrolls past,
+  // and what is being exposed is a gateway holding live provider credentials.
+  // The server performs the same check itself
+  // (src/lib/security/networkExposure.js) — this one just fails faster and with
+  // a clearer message.
+  if (!isLoopbackHost(host) && !isNetworkAllowed()) {
     const lanIp = getLanIp();
-    if (lanIp) console.log(`\x1b[33m⚠ Network-exposed: reachable at http://${lanIp}:${port} (bound 0.0.0.0). Use --host 127.0.0.1 for local-only.\x1b[0m`);
+    const where = WILDCARD_HOSTS.has(String(host).toLowerCase()) ? `all interfaces (${host})` : host;
+    console.error(
+      [
+        "",
+        `\x1b[31m✖ Refusing to start: --host ${host} would bind ${where}.\x1b[0m`,
+        lanIp ? `  It would be reachable at http://${lanIp}:${port} by anything on your network.` : "",
+        "",
+        "  Use the default (loopback) instead:",
+        `    ${APP_NAME} --host 127.0.0.1`,
+        "",
+        "  Or opt in explicitly, keeping authentication enabled:",
+        `    DXR_ALLOW_NETWORK=1 ${APP_NAME} --host ${host}`,
+        "",
+      ]
+        .filter(Boolean)
+        .join("\n")
+    );
+    process.exit(1);
+  }
+
+  if (!isLoopbackHost(host)) {
+    const lanIp = getLanIp();
+    console.log(
+      `\x1b[33m⚠ Network-exposed (DXR_ALLOW_NETWORK=1): reachable at http://${lanIp || host}:${port}. Authentication is required for every request.\x1b[0m`
+    );
   }
 
   let restartCount = 0;
@@ -838,7 +886,7 @@ function startServer(updatePromise) {
     if (restartCount >= MAX_RESTARTS) {
       console.error(`\n⚠️  Server crashed ${MAX_RESTARTS} times. Disabling MIT and restarting...`);
       try {
-        const dbPath = path.join(os.homedir(), process.platform === "win32" ? path.join("AppData", "Roaming", "9router", "db.json") : path.join(".9router", "db.json"));
+        const dbPath = path.join(getAppDataDir(), "db.json");
         if (fs.existsSync(dbPath)) {
           const db = JSON.parse(fs.readFileSync(dbPath, "utf-8"));
           if (db.settings) db.settings.mitmEnabled = false;

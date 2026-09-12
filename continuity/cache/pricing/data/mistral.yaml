@@ -1,0 +1,5 @@
+provider: mistral
+mechanism: none
+verification_method: documentation
+version: 1
+notes: "No cache mechanism, TTL or read/write multiplier could be established from documentation available to this workspace. Zero claimed cache economics (I4); fully routable, compared cache-free. Populate this record from a cache_probe run (Q1) rather than by analogy with another provider."

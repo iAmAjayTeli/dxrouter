@@ -1,0 +1,38 @@
+{
+ "fixture_id": "synthetic-claude-code-style",
+ "label": "synthetic",
+ "is_captured_http_traffic": false,
+ "workload": "Claude Code style: large system prompt, nine tools, tool_result turns, steady growth",
+ "source": {
+  "kind": "handwritten",
+  "note": "Written to match the SHAPE of a Claude Code request (tool set size, system prompt bulk, alternating tool_result turns). No captured bytes, no copied prose. Message bodies are deterministic filler of the stated length."
+ },
+ "project_root": "/repo/dxrouter",
+ "protocol": "claude",
+ "model": "claude-opus-5",
+ "layer_sets": {
+  "cc": {
+   "system": "You are an interactive CLI tool that helps users with software engineering tasks. Use the instructions below and the tools available to you. Follow the user's coding conventions. Never assume a library is available. Be concise and direct. Answer in fewer than four lines unless the user asks for detail.",
+   "tools": [
+    { "name": "Read", "description": "Read a file from the local filesystem", "input_schema": { "type": "object", "properties": { "file_path": { "type": "string" }, "limit": { "type": "number" }, "offset": { "type": "number" } }, "required": ["file_path"] } },
+    { "name": "Write", "description": "Write a file to the local filesystem", "input_schema": { "type": "object", "properties": { "file_path": { "type": "string" }, "content": { "type": "string" } }, "required": ["file_path", "content"] } },
+    { "name": "Edit", "description": "Perform exact string replacement in a file", "input_schema": { "type": "object", "properties": { "file_path": { "type": "string" }, "old_string": { "type": "string" }, "new_string": { "type": "string" }, "replace_all": { "type": "boolean" } }, "required": ["file_path", "old_string", "new_string"] } },
+    { "name": "Bash", "description": "Execute a bash command", "input_schema": { "type": "object", "properties": { "command": { "type": "string" }, "timeout": { "type": "number" } }, "required": ["command"] } },
+    { "name": "Glob", "description": "Fast file pattern matching", "input_schema": { "type": "object", "properties": { "pattern": { "type": "string" }, "path": { "type": "string" } }, "required": ["pattern"] } },
+    { "name": "Grep", "description": "Content search built on ripgrep", "input_schema": { "type": "object", "properties": { "pattern": { "type": "string" }, "glob": { "type": "string" }, "output_mode": { "type": "string" } }, "required": ["pattern"] } },
+    { "name": "TodoWrite", "description": "Update the task list", "input_schema": { "type": "object", "properties": { "todos": { "type": "array" } }, "required": ["todos"] } },
+    { "name": "WebFetch", "description": "Fetch a URL and answer a prompt against it", "input_schema": { "type": "object", "properties": { "url": { "type": "string" }, "prompt": { "type": "string" } }, "required": ["url", "prompt"] } },
+    { "name": "Task", "description": "Launch a subagent", "input_schema": { "type": "object", "properties": { "prompt": { "type": "string" }, "subagent_type": { "type": "string" } }, "required": ["prompt"] } }
+   ]
+  }
+ },
+ "turns": [
+  { "layers": "cc", "append": [["u", 180, "cc-u0"]], "expect": { "confidence": "unknown", "source": "new", "new_session": true, "boundary": null } },
+  { "append": [["a", 640, "cc-a0"], ["u", 1200, "cc-u1"]], "expect": { "confidence": "strongly_inferred", "source": "prefix_extension", "relation": "extension", "new_session": false, "same_session_as": 0 } },
+  { "append": [["a", 520, "cc-a1"], ["u", 4400, "cc-u2"]], "expect": { "confidence": "strongly_inferred", "source": "prefix_extension", "relation": "extension", "new_session": false, "same_session_as": 0 } },
+  { "append": [["a", 380, "cc-a2"], ["u", 260, "cc-u3"]], "expect": { "confidence": "strongly_inferred", "source": "prefix_extension", "relation": "extension", "new_session": false, "same_session_as": 0 } },
+  { "append": [["a", 2100, "cc-a3"], ["u", 9600, "cc-u4"]], "expect": { "confidence": "strongly_inferred", "source": "prefix_extension", "relation": "extension", "new_session": false, "same_session_as": 0 } },
+  { "append": [["a", 700, "cc-a4"], ["u", 340, "cc-u5"]], "expect": { "confidence": "strongly_inferred", "source": "prefix_extension", "relation": "extension", "new_session": false, "same_session_as": 0 } }
+ ],
+ "expected_totals": { "sessions": 1, "boundaries": 0, "false_continuations": 0, "false_splits": 0 }
+}

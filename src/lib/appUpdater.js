@@ -1,8 +1,8 @@
 import { spawn, execSync } from "child_process";
 import path from "path";
 import fs from "fs";
-import os from "os";
 import { UPDATER_CONFIG } from "@/shared/constants/config";
+import { DATA_DIR } from "@/lib/dataDir";
 
 const KILL_TIMEOUT_MS = 5000;
 const PROCESS_WAIT_MS = 1500;
@@ -10,13 +10,9 @@ const PROCESS_WAIT_MS = 1500;
 // Kill MITM server by PID file (MITM may run as admin/sudo)
 function killMitmByPidFile() {
   try {
-    const mitmPidFile = path.join(
-      process.platform === "win32"
-        ? path.join(process.env.APPDATA || "", "9router")
-        : path.join(os.homedir(), ".9router"),
-      "mitm",
-      ".mitm.pid"
-    );
+    // One data root: this used to re-derive `~/.9router` itself, which meant a
+    // DXR_DATA_DIR install looked for the PID file in a directory nothing writes.
+    const mitmPidFile = path.join(DATA_DIR, "mitm", ".mitm.pid");
     if (!fs.existsSync(mitmPidFile)) return;
     const pid = parseInt(fs.readFileSync(mitmPidFile, "utf8").trim(), 10);
     if (!pid) return;
@@ -95,13 +91,10 @@ function collectAppPids() {
   return pids;
 }
 
-// Copy updater.js into DATA_DIR so npm -g can overwrite node_modules safely
+// Copy updater.js into the data root so npm -g can overwrite node_modules safely.
+// Resolution belongs to `@/lib/dataDir` alone (M0: one configured root).
 function getDataDir() {
-  if (process.env.DATA_DIR) return process.env.DATA_DIR;
-  if (process.platform === "win32") {
-    return path.join(process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming"), "9router");
-  }
-  return path.join(os.homedir(), ".9router");
+  return DATA_DIR;
 }
 
 function resolveBundledUpdaterPath() {

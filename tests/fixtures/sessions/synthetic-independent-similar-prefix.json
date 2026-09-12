@@ -1,0 +1,55 @@
+{
+ "fixture_id": "synthetic-independent-similar-prefix",
+ "label": "synthetic",
+ "is_captured_http_traffic": false,
+ "workload": "Two independent conversations in one project, interleaved, sharing a byte-identical tool set and system prompt",
+ "source": {
+  "kind": "handwritten",
+  "note": "Written by hand. This is the normal case for two agent windows open on the same repository, and it is the case a similarity heuristic gets wrong: everything above the messages layer is identical, so only the prefix-extension proof can tell the two apart."
+ },
+ "project_root": "/repo/dxrouter",
+ "protocol": "openai",
+ "model": "gpt-x",
+ "layer_sets": {
+  "shared": {
+   "system": "You are a coding agent working in one repository.",
+   "tools": [
+    { "type": "function", "function": { "name": "read_file", "parameters": { "type": "object", "properties": { "path": { "type": "string" } }, "required": ["path"] } } },
+    { "type": "function", "function": { "name": "edit_file", "parameters": { "type": "object", "properties": { "path": { "type": "string" }, "diff": { "type": "string" } }, "required": ["path", "diff"] } } }
+   ]
+  }
+ },
+ "turns": [
+  { "layers": "shared", "history": "A", "append": [["u", 420, "A-u0"]], "expect": { "confidence": "unknown", "source": "new", "new_session": true } },
+  {
+   "comment": "Window B opens. Same tools, same system prompt, same project, different first message.",
+   "history": "B",
+   "reset": [["u", 420, "B-u0"]],
+   "expect": { "confidence": "unknown", "source": "new", "new_session": true, "different_session_from": 0, "notes_include": "candidates_all_divergent" }
+  },
+  { "history": "A", "append": [["a", 600, "A-a0"], ["u", 500, "A-u1"]], "expect": { "confidence": "strongly_inferred", "source": "prefix_extension", "new_session": false, "same_session_as": 0, "different_session_from": 1 } },
+  { "history": "B", "append": [["a", 640, "B-a0"], ["u", 520, "B-u1"]], "expect": { "confidence": "strongly_inferred", "source": "prefix_extension", "new_session": false, "same_session_as": 1, "different_session_from": 0 } },
+  { "history": "A", "append": [["a", 700, "A-a1"], ["u", 480, "A-u2"]], "expect": { "confidence": "strongly_inferred", "source": "prefix_extension", "new_session": false, "same_session_as": 0, "different_session_from": 1 } },
+  { "history": "B", "append": [["a", 660, "B-a1"], ["u", 540, "B-u2"]], "expect": { "confidence": "strongly_inferred", "source": "prefix_extension", "new_session": false, "same_session_as": 1, "different_session_from": 0 } },
+  {
+   "comment": "Two clients that both send a session header, with byte-identical state. Nothing distinguishes their prefixes.",
+   "history": "X",
+   "key": "window-x",
+   "reset": [["u", 420, "X-u0"]],
+   "expect": { "confidence": "explicit", "source": "header", "new_session": true, "notes_include": "explicit_key_first_seen" }
+  },
+  {
+   "history": "Y",
+   "key": "window-y",
+   "reset": [["u", 420, "X-u0"]],
+   "expect": { "confidence": "explicit", "source": "header", "new_session": true, "notes_include": "explicit_key_first_seen" }
+  },
+  {
+   "comment": "Now a turn arrives with no header that extends BOTH of them equally. Section 4 forbids the coin flip: a new session at unknown is the conservative answer, and a false continuation would have been the alternative.",
+   "history": "X",
+   "append": [["a", 300, "X-a0"], ["u", 260, "X-u1"]],
+   "expect": { "confidence": "unknown", "source": "new", "new_session": true, "notes_include": "multiple_prefix_extension_candidates" }
+  }
+ ],
+ "expected_totals": { "sessions": 5, "boundaries": 0, "false_continuations": 0, "false_splits": 0 }
+}

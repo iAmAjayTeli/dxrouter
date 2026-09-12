@@ -1,0 +1,6 @@
+provider: xai
+mechanism: none
+verification_method: documentation
+source: "https://docs.x.ai/docs/models"
+version: 1
+notes: "Cached prompt tokens appear in xAI pricing material, but neither the TTL nor the exact usage field name could be established from documentation available to this workspace. Zero claimed economics until measured (Q1)."

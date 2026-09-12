@@ -16,7 +16,12 @@ export function createResponsesLogger(model, logsDir = null) {
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, "").slice(0, 15);
   const uniqueId = Math.random().toString(36).slice(2, 8);
-  const baseDir = logsDir || (typeof process !== "undefined" ? process.cwd() : ".");
+  // No `process.cwd()` fallback: diagnostics belong under the single data root. With
+  // neither an explicit `logsDir` nor a configured root, logging stays off rather
+  // than writing a repo-relative directory.
+  const baseDir = logsDir
+    || (typeof process !== "undefined" ? (process.env.DXR_DATA_DIR || process.env.DATA_DIR || null) : null);
+  if (!baseDir) return null;
   const logDir = path.join(baseDir, "logs", `responses_${model}_${timestamp}_${uniqueId}`);
   
   try {

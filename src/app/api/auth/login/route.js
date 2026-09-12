@@ -7,8 +7,9 @@ import { isOidcConfigured } from "@/lib/auth/oidc";
 import { isSamlConfigured } from "@/lib/auth/saml.js";
 import { checkLock, recordFail, recordSuccess, getClientIp } from "@/lib/auth/loginLimiter";
 import { isLocalRequest } from "@/dashboardGuard";
+import { consumeInitialCredentialFile } from "@/lib/security/bootstrapCredential";
 
-const RESET_HINT = "Forgot password? Reset to default via 9Router CLI → Settings → Reset Password to Default.";
+const RESET_HINT = "Forgot password? Generate a new one via the CLI → Settings → Reset Password (prints a fresh random credential).";
 const NO_STORE_HEADERS = { "Cache-Control": "no-store" };
 
 function isTunnelRequest(request, settings) {
@@ -37,7 +38,10 @@ export async function POST(request) {
       return NextResponse.json({ error: "Dashboard access via tunnel is disabled" }, { status: 403 });
     }
 
-    // Default password is '123456' if not set
+    // M0: no default password. The first-run bootstrap writes a bcrypt hash of a
+    // randomly generated credential, so `settings.password` is the only accepted
+    // credential. An explicit INITIAL_PASSWORD is honoured as an operator-chosen
+    // seed for the window before that hash exists.
     const storedHash = settings.password;
 
     if (settings.authMode === "sso" || settings.authMode === "saml" || settings.authMode === "oidc") {
@@ -53,26 +57,36 @@ export async function POST(request) {
     let isValid = false;
     if (storedHash) {
       isValid = await bcrypt.compare(password, storedHash);
+    } else if (process.env.INITIAL_PASSWORD) {
+      isValid = password === process.env.INITIAL_PASSWORD;
     } else {
-      // Use env var or default
-      const initialPassword = process.env.INITIAL_PASSWORD || "123456";
-      isValid = password === initialPassword;
+      // No stored hash and no INITIAL_PASSWORD: the security bootstrap has not
+      // completed, so there is no credential to match. Never fall back to a
+      // well-known value.
+      return NextResponse.json(
+        {
+          error:
+            "No dashboard credential is set up yet. Restart the server — the first run prints a generated credential (also written to initial-credential.txt in the data directory).",
+        },
+        { status: 503, headers: NO_STORE_HEADERS }
+      );
     }
 
     if (isValid) {
       recordSuccess(ip);
 
-      // Default password still in use on a remote client → force a password
-      // change before the dashboard is exposed remotely (keeps local UX intact).
+      // Retained belt-and-braces guard. With no default password this branch is
+      // now unreachable (a missing hash without INITIAL_PASSWORD returns 503
+      // above), but it stays as a second line of defence: no session token may
+      // ever be issued to a remote peer on the strength of a non-stored password.
       const mustChangePassword =
         !storedHash && !process.env.INITIAL_PASSWORD && !isLocalRequest(request);
 
       if (mustChangePassword) {
-        // Do NOT issue a session token: a fresh install's default password is
-        // public knowledge ("123456"), so handing out a valid JWT would let any
-        // remote attacker authenticate and (e.g.) PATCH /api/settings to disable
-        // authentication entirely (CVE-2026-56679 class). Require the password
-        // to be changed first.
+        // Do NOT issue a session token on the strength of a credential that is
+        // not stored as a hash: handing out a valid JWT would let a remote caller
+        // PATCH /api/settings and disable authentication entirely
+        // (CVE-2026-56679 class). Require a stored credential first.
         //
         // NOTE: this intentionally leaves no remote self-service password-change
         // path — the change-password flow (PATCH /api/settings) requires a JWT,
@@ -82,10 +96,13 @@ export async function POST(request) {
         // oversight: issuing any credential before the default password is
         // rotated re-opens the exact attack chain this branch closes.
         return NextResponse.json(
-          { success: false, error: "Default password must be changed before remote access. Change it from the local machine (or set INITIAL_PASSWORD).", mustChangePassword },
+          { success: false, error: "A dashboard credential must be set before remote access. Sign in from the local machine (or set INITIAL_PASSWORD).", mustChangePassword },
           { status: 403, headers: NO_STORE_HEADERS }
         );
       }
+
+      // The one-time credential file has served its purpose.
+      consumeInitialCredentialFile();
 
       const cookieStore = await cookies();
       await setDashboardAuthCookie(cookieStore, request);

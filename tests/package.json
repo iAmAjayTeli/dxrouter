@@ -6,7 +6,11 @@
   "description": "Unit tests for 9router embeddings endpoint",
   "scripts": {
     "test": "vitest run --reporter=verbose",
-    "test:watch": "vitest --reporter=verbose"
+    "test:watch": "vitest --reporter=verbose",
+    "test:m0": "vitest run security/ continuity/ protocol/",
+    "test:security": "vitest run security/",
+    "test:m1": "vitest run continuity/ protocol/m1-no-routing-change.test.js",
+    "test:m2": "vitest run continuity/ protocol/m2-no-routing-change.test.js"
   },
   "devDependencies": {
     "vitest": "^4.0.0"
