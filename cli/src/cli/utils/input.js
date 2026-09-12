@@ -77,6 +77,107 @@ async function confirm(question) {
   }
 }
 
+/** Key names that carry no character of their own and must not enter a secret. */
+const NON_CHARACTER_KEYS = new Set([
+  "up", "down", "left", "right", "escape", "tab", "delete", "insert",
+  "home", "end", "pageup", "pagedown", "clear"
+]);
+
+/**
+ * Read a line whose characters are never echoed.
+ *
+ * Raw mode is turned ON for the duration rather than off. In cooked mode the
+ * terminal itself echoes every keystroke, so there would be nothing left for
+ * this function to suppress; owning the byte stream is what makes hiding the
+ * input possible at all.
+ *
+ * Only the prompt and the terminating newline are written. The characters typed
+ * between them are accumulated in a local buffer and returned — never written to
+ * stdout, never put in a log line, never stored on an object that outlives the
+ * call.
+ *
+ * Without a TTY (piped input, CI) raw mode does not exist and there is no echo
+ * to hide, so this degrades to an ordinary line read and stays scriptable.
+ *
+ * @param {string} question prompt text, written once
+ * @returns {Promise<string>} exactly what was typed, untrimmed
+ */
+async function promptHidden(question) {
+  if (!process.stdin.isTTY) return prompt(question);
+
+  primeRawOnce();
+  const stdin = process.stdin;
+  process.stdout.write(question);
+
+  return new Promise((resolve) => {
+    let buffer = "";
+
+    const onKeypress = (str, key) => {
+      if (!key) return;
+
+      if (key.ctrl && key.name === "c") {
+        stdin.removeListener("keypress", onKeypress);
+        process.stdout.write("\n");
+        process.exit(0);
+      }
+
+      // The newline is still written so the next line starts clean; it reveals
+      // only that Enter was pressed, which the prompt already implies.
+      if (key.name === "return" || key.name === "enter") {
+        stdin.removeListener("keypress", onKeypress);
+        process.stdout.write("\n");
+        resolve(buffer);
+        return;
+      }
+
+      if (key.name === "backspace") {
+        buffer = buffer.slice(0, -1);
+        return;
+      }
+
+      // Control chords, arrows and function keys are dropped rather than
+      // inserted: `str` for those is an escape sequence, and a control byte in a
+      // password is unusable because there is no way to type it back reliably.
+      if (key.ctrl || key.meta || !str || NON_CHARACTER_KEYS.has(key.name)) return;
+
+      buffer += str;
+    };
+
+    stdin.on("keypress", onKeypress);
+    stdin.resume();
+  });
+}
+
+/**
+ * Ask for a new password twice, with no echo, and require the two to match.
+ *
+ * Returns a result rather than throwing or silently re-prompting: the menu
+ * decides how to report a mismatch, and a hidden retry loop would leave the
+ * operator believing their first entry was the one that got stored.
+ *
+ * The emptiness rule mirrors `validateNewPassword` in src/lib/security/
+ * passwordPolicy.js. It is duplicated rather than imported because cli/ is a
+ * separate published package and cannot reach into the server's source tree —
+ * keep the two in step, including the wording, so a CLI rejection and an API
+ * rejection read the same.
+ *
+ * @param {{first?: string, second?: string}} [prompts] prompt text overrides
+ * @returns {Promise<{ok: true, value: string} | {ok: false, error: string}>}
+ */
+async function promptNewSecret(prompts = {}) {
+  const firstPrompt = prompts.first ?? "\n  New password: ";
+  const secondPrompt = prompts.second ?? "  Confirm new password: ";
+
+  const value = await promptHidden(firstPrompt);
+  if (!value) return { ok: false, error: "Password must not be empty" };
+  if (value.trim().length === 0) return { ok: false, error: "Password must not be only whitespace" };
+
+  const confirmation = await promptHidden(secondPrompt);
+  if (value !== confirmation) return { ok: false, error: "Passwords do not match" };
+
+  return { ok: true, value };
+}
+
 async function pause(message = "Press Enter to continue...") {
   return suspendRawFor(() => new Promise((resolve) => {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -148,6 +249,8 @@ async function selectMenu(title, items, defaultIndex = 0, subtitle = "", headerC
 
 module.exports = {
   prompt,
+  promptHidden,
+  promptNewSecret,
   select,
   confirm,
   pause,

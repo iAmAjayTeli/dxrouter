@@ -411,11 +411,16 @@ async function updateSettings(data) {
 }
 
 /**
- * Reset dashboard password to default (clears stored hash server-side)
- * @returns {Promise<Object>} { success }
+ * Reset the dashboard password.
+ *
+ * With `newPassword`, the server stores that password and echoes nothing back.
+ * Without it, the server mints a random credential and returns it once.
+ * @param {string} [newPassword] password the operator chose
+ * @returns {Promise<Object>} { success, data: { credential, shownOnce, userProvided } }
  */
-async function resetPassword() {
-  return makeRequest("POST", "/api/auth/reset-password");
+async function resetPassword(newPassword) {
+  const body = typeof newPassword === "string" && newPassword ? { newPassword } : null;
+  return makeRequest("POST", "/api/auth/reset-password", body);
 }
 
 // ============================================================================

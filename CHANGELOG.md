@@ -1,3 +1,28 @@
+# v0.5.60 (2026-09-13)
+
+## Features
+- **Security**: administrators can set their own dashboard password — the
+  local-only `POST /api/auth/reset-password` now takes an optional
+  `newPassword` and stores its bcrypt hash, returning no credential because
+  the caller already knows it. The CLI prompts for the new password twice
+  with echo suppressed, so it never reaches the terminal scrollback; the
+  random generator stays as the fallback for a lockout
+- **Dashboard**: changing the password goes through the existing
+  `PATCH /api/settings` instead of a second backend — current password
+  verified with `bcrypt.compare`, new one hashed at cost 10, confirmation
+  validated before submitting
+- **Tests**: regression, persistence and security coverage for password
+  management — the real SQLite layer under a temporary data root, a spawned
+  process reading the hash off disk, and a fake TTY asserting that typed
+  characters reach no output stream
+
+## Fixes
+- **Security**: an empty `newPassword` is rejected instead of silently
+  succeeding — `PATCH /api/settings` keyed on truthiness, so an empty
+  `{newPassword: ""}` skipped the change and answered 200. The reset route
+  keeps its local-only CLI-token gate, and no password reaches the database
+  or the logs in plaintext
+
 # v0.5.59 (2026-08-29)
 
 ## Features

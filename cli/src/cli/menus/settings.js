@@ -1,5 +1,5 @@
 const api = require("../api/client");
-const { confirm, pause } = require("../utils/input");
+const { confirm, pause, promptNewSecret } = require("../utils/input");
 const { showStatus } = require("../utils/display");
 const { showMenuWithBack } = require("../utils/menuHelper");
 
@@ -12,8 +12,6 @@ const COLORS = {
   dim: "\x1b[2m",
   cyan: "\x1b[36m"
 };
-
-const DEFAULT_PASSWORD = "123456";
 
 /**
  * Show settings menu (tunnel + RTK + reset password)
@@ -83,7 +81,7 @@ async function showSettingsMenu(breadcrumb = []) {
         action: async (d) => { await toggleHeadroom(d?.settings?.headroomEnabled === true); return true; }
       },
       {
-        label: "🔑 Reset Password to Default",
+        label: "🔑 Set Dashboard Password",
         action: async () => { await resetPassword(); return true; }
       },
       {
@@ -181,11 +179,62 @@ async function toggleHeadroom(currentlyOn) {
 }
 
 /**
- * Reset dashboard password to default via server API (writes the live SQLite DB).
- * After reset, user can log in with the default password "123456".
+ * Set the dashboard password.
+ *
+ * Defaults to letting the operator choose one, because a password you picked and
+ * can remember is the whole point — a generated credential shown once in a
+ * terminal is what people lose. The random generator is kept as the fallback for
+ * the case it is genuinely good at: an install nobody is going to log into by
+ * hand, or a lockout where the operator has nothing to choose.
+ *
+ * Either way the password is never echoed and never printed back, so the only
+ * copy is the one the operator already holds.
  */
 async function resetPassword() {
-  const ok = await confirm(`Reset dashboard password to default "${DEFAULT_PASSWORD}"?`);
+  const chooseOwn = await confirm(
+    "Set a password you choose? (answer n to generate a random one instead)"
+  );
+
+  if (chooseOwn) {
+    await setChosenPassword();
+    return;
+  }
+  await generateRandomPassword();
+}
+
+/** Prompt for a password twice, with no echo, and store it. */
+async function setChosenPassword() {
+  console.log(`  ${COLORS.dim}Typing is hidden — nothing is echoed or logged.${COLORS.reset}`);
+
+  const entered = await promptNewSecret();
+  if (!entered.ok) {
+    showStatus(`${entered.error}. Nothing was changed.`, "error");
+    await pause();
+    return;
+  }
+
+  const result = await api.resetPassword(entered.value);
+
+  if (result.success) {
+    // Deliberately not repeated back: it is already in the operator's head, and
+    // printing it would put it in the scrollback this flow exists to avoid.
+    showStatus("Dashboard password updated.", "success");
+  } else {
+    showStatus(`Failed to set password: ${result.error}`, "error");
+  }
+
+  await pause();
+}
+
+/**
+ * Generate a random credential server-side and show it exactly once.
+ *
+ * This is the lockout escape hatch, not the normal path: the server writes the
+ * hash and returns the plaintext a single time, and there is no way to read it
+ * back afterwards.
+ */
+async function generateRandomPassword() {
+  const ok = await confirm("Replace the dashboard password with a newly generated credential?");
   if (!ok) {
     showStatus("Cancelled", "info");
     await pause();
@@ -193,8 +242,15 @@ async function resetPassword() {
   }
 
   const result = await api.resetPassword();
-  if (result.success) {
-    showStatus(`Password reset. Default: ${DEFAULT_PASSWORD}`, "success");
+  const credential = result?.credential || result?.data?.credential;
+  if (result.success && credential) {
+    console.log("");
+    console.log(`  New dashboard credential: ${COLORS.green}${credential}${COLORS.reset}`);
+    console.log(`  ${COLORS.dim}Shown once — copy it now, then set your own from this menu.${COLORS.reset}`);
+    console.log("");
+    showStatus("Password reset.", "success");
+  } else if (result.success) {
+    showStatus("Password reset, but the server did not return the new credential.", "error");
   } else {
     showStatus(`Failed to reset password: ${result.error}`, "error");
   }

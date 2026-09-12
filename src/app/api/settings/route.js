@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSettings, updateSettings } from "@/lib/localDb";
 import { applyOutboundProxyEnv } from "@/lib/network/outboundProxy";
 import { resetComboRotation } from "open-sse/services/combo.js";
+import { validateNewPassword } from "@/lib/security/passwordPolicy";
 import bcrypt from "bcryptjs";
 
 export const dynamic = "force-dynamic";
@@ -42,8 +43,17 @@ export async function PATCH(request) {
     // Strip protected secrets before any internal handling sets them
     for (const key of PROTECTED_SETTING_KEYS) delete body[key];
 
-    // If updating password, hash it
-    if (body.newPassword) {
+    // If updating password, hash it.
+    //
+    // Keyed on presence, not truthiness: `{newPassword: ""}` is falsy, so it used
+    // to skip this branch entirely and land on a 200 with nothing changed — a
+    // client that submitted an empty field read that as a successful change.
+    if (Object.prototype.hasOwnProperty.call(body, "newPassword")) {
+      const invalid = validateNewPassword(body.newPassword);
+      if (invalid) {
+        return NextResponse.json({ error: invalid }, { status: 400 });
+      }
+
       const settings = await getSettings();
       const currentHash = settings.password;
 
