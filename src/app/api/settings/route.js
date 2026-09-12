@@ -67,10 +67,13 @@ export async function PATCH(request) {
           return NextResponse.json({ error: "Invalid current password" }, { status: 401 });
         }
       } else {
-        // First time setting password, no current password needed
-        // Allow empty currentPassword or default "123456"
-        if (body.currentPassword && body.currentPassword !== "123456") {
-           return NextResponse.json({ error: "Invalid current password" }, { status: 401 });
+        // No stored hash: the first-run bootstrap always writes one, so this is
+        // only reachable before it has completed. Accept an empty
+        // `currentPassword` (there is nothing to verify against) but never a
+        // well-known literal — M0 removed the "123456" default outright, and
+        // honouring it here would put it back.
+        if (body.currentPassword) {
+          return NextResponse.json({ error: "Invalid current password" }, { status: 401 });
         }
       }
 
