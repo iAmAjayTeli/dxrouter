@@ -8,8 +8,9 @@ import m002 from "./002-sessions-m1.js";
 import m003 from "./003-cache-m2.js";
 import m004 from "./004-attempt-outcome.js";
 import m005 from "./005-prefix-rule-provenance.js";
+import m006 from "./006-prefix-penultimate-norm.js";
 
-export const MIGRATIONS = [m001, m002, m003, m004, m005];
+export const MIGRATIONS = [m001, m002, m003, m004, m005, m006];
 
 /** Highest version this build knows how to reach. */
 export function latestVersion() {

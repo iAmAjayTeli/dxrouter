@@ -94,7 +94,9 @@ export function findOpenCandidatesByLayers(db, { projectRoot, toolsHash, systemH
               -- prefixStateRepo because this is the *inferred* path: a candidate that
               -- arrives without them can only be judged strictly, which is how the
               -- moved-cache-breakpoint rule silently stopped applying to real traffic.
-              p.final_digest_norm, p.prefix_rule_version
+              -- penultimate_digest_norm is rule r2's second position; omitting it here
+              -- would reintroduce exactly that failure for the two-position window.
+              p.final_digest_norm, p.penultimate_digest_norm, p.prefix_rule_version
          FROM sessions s
          JOIN session_prefix p ON p.session_id = s.id
         WHERE s.closed_at IS NULL
@@ -136,6 +138,7 @@ export function findOpenCandidatesByLayers(db, { projectRoot, toolsHash, systemH
       digests: r.digests_json ? safeParseArray(r.digests_json) : null,
       digests_truncated: !!r.digests_truncated,
       final_digest_norm: r.final_digest_norm ?? null,
+      penultimate_digest_norm: r.penultimate_digest_norm ?? null,
       prefix_rule_version: r.prefix_rule_version ?? null,
     },
   }));

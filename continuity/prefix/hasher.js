@@ -71,20 +71,28 @@ export function chainFromDigests(digests) {
  * Hash the messages layer.
  *
  * Every hash here is strict: the canonical digest of exactly what the client sent.
- * Two extra fields exist for the bounded cache-bookkeeping re-test in
- * `prefix/extension.js`, and neither of them changes a strict hash:
+ * Three extra fields exist for the bounded cache-bookkeeping re-test in
+ * `prefix/extension.js`, and none of them changes a strict hash:
  *
  *  - `final_digest_norm` is the last message's digest under `PREFIX_RULE_VERSION`
- *    (bookkeeping fields removed). It is the one value the *next* request needs in
- *    order to re-test the boundary, so it is computed eagerly and persisted — exactly
- *    one extra message digest per turn, no second digest chain.
+ *    (bookkeeping fields removed). It is one of the two values the *next* request needs
+ *    in order to re-test the boundary, so it is computed eagerly and persisted.
+ *  - `penultimate_digest_norm` is the same thing for the second-to-last message, and it
+ *    is the other one. Rule `r2` tolerates the moved breakpoint at `count - 1` OR
+ *    `count - 2` (see `prefix/bookkeeping.js` for the measurement), and the store must
+ *    be able to answer at both positions or the re-test fails closed. `null` when the
+ *    list holds fewer than two messages, which is the truthful value.
  *  - `normalized_digest_at(i)` computes the same thing for any index, on demand and
- *    memoised. Nothing calls it unless the strict test has already failed at the one
- *    boundary index, so the normal path pays nothing for it.
+ *    memoised. Nothing calls it unless the strict test has already failed inside that
+ *    window, so the normal path pays nothing for it.
+ *
+ * That is two extra message digests per turn, both drawn from the same memoised
+ * accessor. There is still exactly one digest chain.
  *
  * @returns {{hash: string|null, count: number|null, digests: string[]|null,
  *            chain: string[]|null, final_digest_norm: string|null,
- *            prefix_rule_version: string, normalized_digest_at: (i: number) => string|null}}
+ *            penultimate_digest_norm: string|null, prefix_rule_version: string,
+ *            normalized_digest_at: (i: number) => string|null}}
  */
 export function hashMessagesLayer(messages) {
   const digests = messageDigests(messages);
@@ -95,6 +103,7 @@ export function hashMessagesLayer(messages) {
       digests: null,
       chain: null,
       final_digest_norm: null,
+      penultimate_digest_norm: null,
       prefix_rule_version: PREFIX_RULE_VERSION,
       normalized_digest_at: () => null,
     };
@@ -113,6 +122,9 @@ export function hashMessagesLayer(messages) {
     digests,
     chain,
     final_digest_norm: list.length ? normalizedDigestAt(list.length - 1) : null,
+    // Fewer than two messages means there is no penultimate message to re-test, and
+    // `normalizedDigestAt` would return null for the out-of-range index anyway.
+    penultimate_digest_norm: list.length >= 2 ? normalizedDigestAt(list.length - 2) : null,
     prefix_rule_version: PREFIX_RULE_VERSION,
     normalized_digest_at: normalizedDigestAt,
   };
@@ -143,6 +155,7 @@ export function computePrefixLayers({ tools, system, messages } = {}, { tokenize
       digests: msg.digests,
       chain: msg.chain,
       final_digest_norm: msg.final_digest_norm,
+      penultimate_digest_norm: msg.penultimate_digest_norm,
       prefix_rule_version: msg.prefix_rule_version,
       normalized_digest_at: msg.normalized_digest_at,
       ...messagesTokens,

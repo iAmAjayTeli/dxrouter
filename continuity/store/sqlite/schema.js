@@ -19,7 +19,7 @@
  */
 
 /** Bumped only by adding a migration file; see migrations/index.js. */
-export const CONTINUITY_SCHEMA_VERSION = 5;
+export const CONTINUITY_SCHEMA_VERSION = 6;
 
 /** Applied on every open, before any migration. */
 export const PRAGMA_STATEMENTS = [
@@ -545,3 +545,19 @@ export const PREFIX_RULE_SESSION_PREFIX_COLUMNS = [
   ["final_digest_norm", "TEXT"],
   ["prefix_rule_version", "TEXT"],
 ];
+
+/**
+ * Migration 006 — the second boundary digest rule `r2` needs (`session_prefix`).
+ *
+ * `final_digest_norm` answers the question at `message_count - 1`. A six-request capture
+ * of one real Claude Code conversation measured the same client keeping TWO rolling
+ * `cache_control` breakpoints, so a continuing request can differ at `message_count - 2`
+ * as well — and the row holds digests, never messages, so that position cannot be
+ * re-derived after the fact. This column records it at write time.
+ *
+ * Still one value per turn from the same memoised accessor, still a one-way digest of
+ * one message, still no second digest chain. NULL on every row written before this
+ * migration, which is the truthful value and is exactly what makes an r1-era row
+ * unsofteneable by the two-position path (`prefix/extension.js` fails closed on it).
+ */
+export const PREFIX_R2_SESSION_PREFIX_COLUMNS = [["penultimate_digest_norm", "TEXT"]];

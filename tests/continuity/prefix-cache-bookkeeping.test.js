@@ -1,5 +1,5 @@
 /**
- * The moved-cache-breakpoint rule (prefix/bookkeeping.js, rule "r1").
+ * The moved-cache-breakpoint rule (prefix/bookkeeping.js), one-position cases.
  *
  * Measured, not hypothesised: a bounded capture of real Claude Code traffic through the
  * local gateway showed `cache_control: {"type":"ephemeral"}` moving onto the newest
@@ -10,6 +10,11 @@
  *
  * The message shapes below reproduce that captured pattern: a `tool_result` block that
  * carries the breakpoint while it is trailing and loses it once it is history.
+ *
+ * Rule `r2` later widened the tolerated position to prev.count - 2 as well, after a
+ * six-request capture measured the same client keeping two rolling breakpoints. Those
+ * cases live in `prefix-cache-bookkeeping-r2.test.js`; this file keeps the
+ * one-position behaviour and the narrowness guarantees.
  *
  * What these tests are really guarding is the *narrowness* of the rule. A relaxation
  * that is too wide is a false continuation — one conversation reading another's prefix
@@ -55,7 +60,7 @@ const toolResult = (i, mark = false) => ({
   content: [bp({ type: "tool_result", tool_use_id: `tu${i}`, content: `file ${i} contents` }, mark)],
 });
 
-/** What the store keeps for a session, including the boundary digest it now records. */
+/** What the store keeps for a session, including the boundary digests it now records. */
 const recorded = (msgs) => {
   const layer = hashMessagesLayer(msgs);
   return {
@@ -63,6 +68,7 @@ const recorded = (msgs) => {
     count: layer.count,
     digests: layer.digests,
     final_digest_norm: layer.final_digest_norm,
+    penultimate_digest_norm: layer.penultimate_digest_norm,
   };
 };
 /** What a fresh request produces: chain plus the lazy normalized-digest accessor. */
@@ -149,9 +155,12 @@ describe("everything else remains a genuine discontinuity", () => {
     expect(r.reason).toBe(reason);
   };
 
-  it("does not ignore a breakpoint on a non-trailing historical message", () => {
-    const next = [ask(0), callTool(1, true), toolResult(1), callTool(3), toolResult(3, true)];
-    const r = classifyMessageSequences(recorded(FIRST), incoming(next));
+  it("does not ignore a breakpoint on a historical message outside the window", () => {
+    // Rule r2 tolerates prev.count - 1 and prev.count - 2. This marker moves at index 1
+    // of a five-message prefix — prev.count - 4 — so it is a real discontinuity.
+    const prev5 = [ask(0), callTool(1), toolResult(1), callTool(2), toolResult(2, true)];
+    const next = [ask(0), callTool(1, true), toolResult(1), callTool(2), toolResult(2), callTool(3), toolResult(3, true)];
+    const r = classifyMessageSequences(recorded(prev5), incoming(next));
     stays(r, "divergence_not_at_recorded_boundary");
     expect(r.strict_divergence_index).toBe(1);
   });

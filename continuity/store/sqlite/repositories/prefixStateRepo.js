@@ -15,7 +15,7 @@
 
 const PREFIX_COLUMNS = `session_id, updated_at, turn_idx, tools_hash, system_hash, messages_hash,
   message_count, tools_tokens, system_tokens, messages_tokens, digests_json, digests_truncated,
-  final_digest_norm, prefix_rule_version`;
+  final_digest_norm, penultimate_digest_norm, prefix_rule_version`;
 
 /** Cap a digest list, keeping the opening messages. */
 export function capDigests(digests, maxDigests) {
@@ -55,9 +55,12 @@ export function getPrefixState(db, sessionId) {
     messages_tokens: r.messages_tokens,
     digests: parseDigests(r.digests_json),
     digests_truncated: !!r.digests_truncated,
-    // The boundary re-test's one input, and the rule that produced it. NULL on a row
-    // written before the rule existed, which leaves the strict verdict standing.
+    // The boundary re-test's inputs, and the rule that produced them. NULL on a row
+    // written before the corresponding value was recorded, which leaves the strict
+    // verdict standing — `penultimate_digest_norm` is NULL on every pre-r2 row, which is
+    // what stops the two-position path from softening an old observation.
     final_digest_norm: r.final_digest_norm ?? null,
+    penultimate_digest_norm: r.penultimate_digest_norm ?? null,
     prefix_rule_version: r.prefix_rule_version ?? null,
   };
 }
@@ -77,7 +80,7 @@ export function upsertPrefixState(db, { session_id, updated_at, turn_idx, prefix
   const { digests, truncated } = capDigests(prefix?.digests ?? null, maxDigests);
   db.run(
     `INSERT INTO session_prefix (${PREFIX_COLUMNS})
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(session_id) DO UPDATE SET
        updated_at = excluded.updated_at,
        turn_idx = excluded.turn_idx,
@@ -91,6 +94,7 @@ export function upsertPrefixState(db, { session_id, updated_at, turn_idx, prefix
        digests_json = excluded.digests_json,
        digests_truncated = excluded.digests_truncated,
        final_digest_norm = excluded.final_digest_norm,
+       penultimate_digest_norm = excluded.penultimate_digest_norm,
        prefix_rule_version = excluded.prefix_rule_version`,
     [
       session_id,
@@ -105,9 +109,10 @@ export function upsertPrefixState(db, { session_id, updated_at, turn_idx, prefix
       Number.isInteger(prefix?.messages_tokens) ? prefix.messages_tokens : null,
       digests ? JSON.stringify(digests) : null,
       truncated ? 1 : 0,
-      // Not capped and not truncatable: it is one digest of one message, and it is the
-      // only thing the next turn can re-test the boundary against.
+      // Not capped and not truncatable: one digest of one message each, and together
+      // they are the only thing the next turn can re-test the r2 window against.
       prefix?.final_digest_norm ?? null,
+      prefix?.penultimate_digest_norm ?? null,
       prefix?.prefix_rule_version ?? null,
     ],
   );

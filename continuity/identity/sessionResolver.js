@@ -75,10 +75,12 @@ export function layersToPrefixState(layers) {
     messages_tokens: layers?.messages?.tokens ?? null,
     digests: layers?.messages?.digests ?? null,
     chain: layers?.messages?.chain ?? null,
-    // The one value the NEXT turn needs to re-test this turn's final message with cache
-    // bookkeeping removed, plus the rule that produced it. Persisted; a null on an
-    // existing row means "written before the rule existed", never "the rule said no".
+    // The two values the NEXT turn needs to re-test this turn's final and second-to-last
+    // messages with cache bookkeeping removed, plus the rule that produced them.
+    // Persisted; a null on an existing row means "written before that value was
+    // recorded", never "the rule said no".
     final_digest_norm: layers?.messages?.final_digest_norm ?? null,
+    penultimate_digest_norm: layers?.messages?.penultimate_digest_norm ?? null,
     prefix_rule_version: PREFIX_RULE_VERSION,
   };
 }
@@ -96,6 +98,7 @@ export function messagesViewOf(prefixState) {
     digests: prefixState?.digests ?? null,
     chain: prefixState?.chain ?? null,
     final_digest_norm: prefixState?.final_digest_norm ?? null,
+    penultimate_digest_norm: prefixState?.penultimate_digest_norm ?? null,
   };
 }
 

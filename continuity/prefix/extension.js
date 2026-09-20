@@ -31,25 +31,27 @@
  * verdict is always reported, in `strict_relation` / `strict_divergence_index`.
  *
  * A measured client behaviour makes that verdict, on its own, split conversations
- * that never ended: Claude Code moves its `cache_control` breakpoint onto the newest
- * message and removes it from the message that used to be newest. The bytes of that
- * message are otherwise identical (see prefix/bookkeeping.js for the captured
- * evidence). Strictly it is a different message, at exactly index prev.count - 1, so
- * the strict test reports a divergence at the last recorded message and the next
- * request looks like a new conversation.
+ * that never ended: Claude Code moves its `cache_control` breakpoints onto its newest
+ * messages and removes them from the messages that used to be newest. The bytes of
+ * those messages are otherwise identical (see prefix/bookkeeping.js for the captured
+ * evidence, including the six-request capture that measured TWO rolling breakpoints).
+ * Strictly they are different messages, at index prev.count - 1 and/or prev.count - 2,
+ * so the strict test reports a divergence at or just before the last recorded message
+ * and the next request looks like a new conversation.
  *
- * So when — and only when — the strict test says DIVERGENCE at exactly that one
- * index, the boundary message is compared once more with the enumerated bookkeeping
- * fields removed. Every other index is untouched, because the strict test already
- * proved 0..k-1 byte-identical to get k. If the boundary matches under that rule the
- * whole recorded prefix matches under that rule, which is an exact prefix extension,
- * and the turn is a continuation. `normalized_by` records the rule that softened it.
+ * So when — and only when — the strict test says DIVERGENCE at exactly `prev.count - 1`
+ * or `prev.count - 2` (rule "r2"), every message from that index through the last
+ * recorded one is compared again with the enumerated bookkeeping fields removed. Every
+ * earlier index is untouched, because the strict test already proved 0..k-1
+ * byte-identical to get k. If the whole window matches under that rule the whole
+ * recorded prefix matches under that rule, which is an exact prefix extension, and the
+ * turn is a continuation. `normalized_by` records the rule that softened it.
  *
  * What that is not: not similarity, not a token or time or name comparison, not a
  * tolerance, not fuzzy matching. It is digest equality over a byte-exact
- * transformation with a literal field list, applied at one index. Divergence anywhere
- * else — including one index earlier — stays a divergence, and so does a boundary
- * whose content actually changed.
+ * transformation with a literal field list, applied at one or two named indices.
+ * Divergence anywhere else — including one index earlier than the window — stays a
+ * divergence, and so does any message in the window whose content actually changed.
  *
  * Pure: no clock, no environment, no store.
  */
@@ -145,46 +147,83 @@ export function isPrefixContinuation(relation) {
 }
 
 /**
- * Re-test the single boundary message with cache bookkeeping removed.
+ * The recorded normalized digest for one index, or null when the store cannot answer.
  *
- * Runs only on a strict DIVERGENCE, only when the divergence is at exactly
- * `prev.count - 1`, and only when both sides can supply a normalized digest for that
- * one index. Every guard below fails closed: the strict divergence stands and the
- * `reason` says which piece of evidence was missing.
+ * Only two indices are answerable, and each has its own persisted column, because the
+ * row holds digests and never messages: there is nothing to re-derive from. A null here
+ * always means "this row was written by a build that did not record that value", never
+ * "the rule said no" — which is exactly why an r1-era row cannot be softened by the
+ * two-position path: it has no `penultimate_digest_norm` to compare against.
+ */
+function recordedNormalizedAt(prev, i) {
+  if (i === prev.count - 1) return typeof prev.final_digest_norm === "string" ? prev.final_digest_norm : null;
+  if (i === prev.count - 2) {
+    return typeof prev.penultimate_digest_norm === "string" ? prev.penultimate_digest_norm : null;
+  }
+  return null;
+}
+
+/**
+ * Re-test the boundary message(s) with cache bookkeeping removed.
+ *
+ * Runs only on a strict DIVERGENCE, only when the divergence index is `prev.count - 1`
+ * or `prev.count - 2` (rule `r2`; see `prefix/bookkeeping.js` for the capture that
+ * measured the two-wide window), and only when both sides can supply a normalized
+ * digest for EVERY index from the divergence through `prev.count - 1`. Every guard
+ * below fails closed: the strict divergence stands and the `reason` says which piece of
+ * evidence was missing.
+ *
+ * Requiring the whole window, not just the divergence index, is what keeps the rule
+ * exact. The strict test already proved 0..k-1 byte-identical to arrive at k; verifying
+ * k..count-1 under the rule then proves the entire recorded prefix matches under the
+ * rule, which is an exact prefix extension. Checking only k would leave the indices
+ * after it unexamined.
  */
 function retestMovedCacheBreakpoint(out, prev, next) {
   const k = out.divergence_index;
-  if (!Number.isInteger(k) || k !== prev.count - 1) {
+  const last = prev.count - 1;
+  const penultimate = prev.count - 2;
+  if (!Number.isInteger(k) || (k !== last && k !== penultimate)) {
     // Includes a null index (the recorded digests were absent or truncated) and any
-    // divergence deeper in the history, which is a real discontinuity.
+    // divergence at prev.count - 3 or deeper, which is a real discontinuity.
     out.reason = "divergence_not_at_recorded_boundary";
     return out;
   }
-  const recorded = typeof prev.final_digest_norm === "string" ? prev.final_digest_norm : null;
-  if (!recorded) {
-    // A row written before this rule existed, so the question cannot be asked of it.
-    out.reason = "no_normalized_boundary_digest_recorded";
-    return out;
-  }
   const at = typeof next.normalized_digest_at === "function" ? next.normalized_digest_at : null;
-  const incoming = at ? at(k) : null;
-  if (typeof incoming !== "string") {
+  if (!at) {
     out.reason = "normalized_boundary_digest_unavailable";
     return out;
   }
-  if (incoming !== recorded) {
-    // The boundary message really did change. Removing the bookkeeping fields did not
-    // make it the same message, so this is a genuine discontinuity.
-    out.reason = "boundary_differs_beyond_cache_bookkeeping";
-    return out;
+
+  for (let i = k; i <= last; i += 1) {
+    const recorded = recordedNormalizedAt(prev, i);
+    if (!recorded) {
+      // A row written before this position was recorded, so the question cannot be
+      // asked of it. Named per position so an operator can tell which value is missing.
+      out.reason =
+        i === last ? "no_normalized_boundary_digest_recorded" : "no_normalized_penultimate_digest_recorded";
+      return out;
+    }
+    const incoming = at(i);
+    if (typeof incoming !== "string") {
+      out.reason = "normalized_boundary_digest_unavailable";
+      return out;
+    }
+    if (incoming !== recorded) {
+      // This message really did change. Removing the bookkeeping fields did not make it
+      // the same message, so this is a genuine discontinuity.
+      out.reason = "boundary_differs_beyond_cache_bookkeeping";
+      return out;
+    }
   }
 
-  // 0..k-1 are byte-identical (that is how k was found) and k is identical under the
-  // rule, so the whole recorded prefix of prev.count messages matches under the rule.
+  // 0..k-1 are byte-identical (that is how k was found) and k..count-1 are identical
+  // under the rule, so the whole recorded prefix of prev.count messages matches under
+  // the rule.
   out.relation = next.count === prev.count ? MESSAGE_RELATION.IDENTICAL : MESSAGE_RELATION.EXTENSION;
   out.divergence_index = null;
   out.normalized_by = PREFIX_RULE_VERSION;
-  out.reason = "cache_breakpoint_moved";
+  out.reason = k === last ? "cache_breakpoint_moved" : "cache_breakpoint_moved_window";
   return out;
 }
 
@@ -192,9 +231,10 @@ function retestMovedCacheBreakpoint(out, prev, next) {
  * Classify the new message sequence against the previously observed one: the strict
  * test, plus the one bounded bookkeeping re-test documented at the top of this file.
  *
- * @param {object} prev previously recorded messages state. `final_digest_norm` is the
- *        recorded normalized digest of its last message; absent on rows written before
- *        `PREFIX_RULE_VERSION` existed, which simply leaves the strict verdict standing.
+ * @param {object} prev previously recorded messages state. `final_digest_norm` and
+ *        `penultimate_digest_norm` are the recorded normalized digests of its last and
+ *        second-to-last messages; either absent on rows written before that position was
+ *        recorded, which simply leaves the strict verdict standing.
  * @param {object} next freshly hashed messages state. `normalized_digest_at(i)` is the
  *        lazy accessor from `hashMessagesLayer`.
  * @returns {object} the strict shape plus `strict_relation`, `strict_divergence_index`
