@@ -262,26 +262,33 @@ describe("the resolver acts on the softened verdict and says that it did", () =>
     expect(r.labels).toContain(M1_LABELS.PREFIX_CACHE_BREAKPOINT_MOVED);
   });
 
-  it("still refuses a candidate whose tools changed, softenable boundary or not", () => {
+  it("keeps the lineage when tools changed, and records both the softening and the transition", () => {
+    // Inverted with the front-layer split: a changed tool set no longer excludes the
+    // candidate. Both facts now land on the same turn — the boundary was softened AND
+    // the front layer moved — where previously the tools change hid the softening by
+    // opening a new session before the re-test could be reported.
     const otherTools = [...TOOLS, { name: "run", description: "run a command", parameters: { type: "object" } }];
     const r = resolveSessionIdentity({
       layers: layersFor(SECOND, { tools: otherTools }),
       candidates: [candidateFor(FIRST)],
     });
-    expect(r.action).toBe(RESOLUTION_ACTION.OPEN);
-    expect(r.session_id).toBeNull();
-    expect(r.confidence).toBe(IDENTITY_CONFIDENCE.UNKNOWN);
-    expect(r.notes).toContain("candidates_dropped_on_tools_or_system_change");
-    expect(r.labels).not.toContain(M1_LABELS.PREFIX_CACHE_BREAKPOINT_MOVED);
+    expect(r.action).toBe(RESOLUTION_ACTION.CONTINUE);
+    expect(r.confidence).toBe(IDENTITY_CONFIDENCE.WEAKLY_INFERRED);
+    expect(r.invalidated).toContain("tools");
+    expect(r.labels).toContain(M1_LABELS.FRONT_LAYER_TRANSITION);
+    expect(r.labels).toContain(M1_LABELS.PREFIX_CACHE_BREAKPOINT_MOVED);
+    expect(r.notes).not.toContain("candidates_dropped_on_tools_or_system_change");
   });
 
-  it("still refuses a candidate whose system prompt changed", () => {
+  it("keeps the lineage when the system prompt changed, and records the transition", () => {
     const r = resolveSessionIdentity({
       layers: layersFor(SECOND, { system: `${SYSTEM} Be terse.` }),
       candidates: [candidateFor(FIRST)],
     });
-    expect(r.action).toBe(RESOLUTION_ACTION.OPEN);
-    expect(r.notes).toContain("candidates_dropped_on_tools_or_system_change");
+    expect(r.action).toBe(RESOLUTION_ACTION.CONTINUE);
+    expect(r.invalidated).toContain("system");
+    expect(r.labels).toContain(M1_LABELS.FRONT_LAYER_TRANSITION);
+    expect(r.notes).not.toContain("candidates_dropped_on_tools_or_system_change");
   });
 
   it("still closes an explicitly keyed session on a real content change", () => {
@@ -380,15 +387,23 @@ describe("end to end: the captured pattern lands in one session", () => {
     expect(h.db.get("SELECT COUNT(*) AS n FROM sessions").n).toBe(2);
   });
 
-  it("still opens a second session when the tool set changed", async () => {
+  it("keeps ONE session when the tool set changed, recording the front-layer transition", async () => {
+    // Previously this split into two sessions, which is exactly how front-layer churn
+    // became unobservable: the tools change was recorded only as another session row.
     const h = await harness();
     const first = await h.observe(turnRequest({ msgs: FIRST }));
     h.tick(4000);
     const second = await h.observe(
       turnRequest({ msgs: SECOND, tools: [...TOOLS, { name: "run", description: "run", parameters: { type: "object" } }] }),
     );
-    expect(second.session_id).not.toBe(first.session_id);
-    expect(h.db.get("SELECT COUNT(*) AS n FROM sessions").n).toBe(2);
+    expect(second.session_id).toBe(first.session_id);
+    expect(second.created_session).toBe(false);
+    expect(h.db.get("SELECT COUNT(*) AS n FROM sessions").n).toBe(1);
+    const row = h.db.get("SELECT invalidated_layers, labels FROM turns WHERE session_id = ? AND idx = 1", [
+      first.session_id,
+    ]);
+    expect(row.invalidated_layers).toBe("tools,system,messages");
+    expect(String(row.labels)).toContain(M1_LABELS.FRONT_LAYER_TRANSITION);
   });
 
   it("keeps a legacy row without a boundary digest interpretable: it splits, as before", async () => {

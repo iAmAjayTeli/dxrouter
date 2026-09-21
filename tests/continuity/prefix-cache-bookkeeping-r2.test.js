@@ -412,14 +412,16 @@ describe("the resolver acts on a softened window and says that it did", () => {
     expect(r.close_predecessor).toBeNull();
   });
 
-  it("still refuses a candidate whose tools changed", () => {
+  it("keeps the lineage when tools changed, reporting the window softening and the transition", () => {
     const otherTools = [...TOOLS, { name: "run", description: "run a command", parameters: { type: "object" } }];
     const r = resolveSessionIdentity({
       layers: layersFor(NEXT, { tools: otherTools }),
       candidates: [candidateFor(PREV)],
     });
-    expect(r.action).toBe(RESOLUTION_ACTION.OPEN);
-    expect(r.notes).toContain("candidates_dropped_on_tools_or_system_change");
+    expect(r.action).toBe(RESOLUTION_ACTION.CONTINUE);
+    expect(r.normalized_by).toBe(PREFIX_RULE_VERSION);
+    expect(r.invalidated).toContain("tools");
+    expect(r.notes).not.toContain("candidates_dropped_on_tools_or_system_change");
   });
 });
 

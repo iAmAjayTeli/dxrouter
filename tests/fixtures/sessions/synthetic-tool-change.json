@@ -2,7 +2,7 @@
  "fixture_id": "synthetic-tool-change",
  "label": "synthetic",
  "is_captured_http_traffic": false,
- "workload": "A mid-session tool-set change and then a system-prompt change, both of which end the prefix",
+ "workload": "A mid-session tool-set change and then a system-prompt change, both of which invalidate the cacheable prefix without ending the lineage",
  "source": {
   "kind": "handwritten",
   "note": "Written by hand. Real agents do this when a user enables an MCP server mid-session (tools grow) or switches mode (system prompt changes); a transcript cannot supply it, because a transcript records neither layer."
@@ -39,19 +39,19 @@
   { "layers": "base", "append": [["u", 300, "tc-u0"]], "expect": { "confidence": "unknown", "source": "new", "new_session": true } },
   { "append": [["a", 700, "tc-a0"], ["u", 900, "tc-u1"]], "expect": { "confidence": "strongly_inferred", "source": "prefix_extension", "new_session": false, "same_session_as": 0 } },
   {
-   "comment": "An MCP server came online: the tools array grew. The messages are still a perfect prefix extension, and it still is NOT the same prefix, because the tools layer sits above them.",
+   "comment": "An MCP server came online: the tools array grew. The messages are still a perfect prefix extension, so the LINEAGE continues; the tools layer sits above them, so the cacheable PREFIX is invalidated. Those are two different facts, and the turn records both: the grade steps down to weakly_inferred and the changed front layer is named.",
    "layers": "more_tools",
    "append": [["a", 640, "tc-a1"], ["u", 850, "tc-u2"]],
-   "expect": { "confidence": "unknown", "source": "new", "new_session": true, "boundary": null, "different_session_from": 0, "relation": "indeterminate", "notes": [] }
+   "expect": { "confidence": "weakly_inferred", "source": "prefix_extension", "new_session": false, "same_session_as": 0, "boundary": null, "relation": "extension", "notes": ["front_layer_changed:tools"] }
   },
-  { "append": [["a", 520, "tc-a2"], ["u", 770, "tc-u3"]], "expect": { "confidence": "strongly_inferred", "source": "prefix_extension", "new_session": false, "same_session_as": 2, "different_session_from": 0 } },
+  { "append": [["a", 520, "tc-a2"], ["u", 770, "tc-u3"]], "expect": { "confidence": "strongly_inferred", "source": "prefix_extension", "new_session": false, "same_session_as": 0, "notes": [] } },
   {
-   "comment": "Now the system prompt changes with the tools held constant, which invalidates system and everything below it.",
+   "comment": "Now the system prompt changes with the tools held constant, which invalidates system and everything below it. Again the lineage survives on the messages proof and the transition is recorded.",
    "layers": "new_system",
    "append": [["a", 480, "tc-a3"], ["u", 660, "tc-u4"]],
-   "expect": { "confidence": "unknown", "source": "new", "new_session": true, "boundary": null, "different_session_from": 2, "relation": "indeterminate", "notes": [] }
+   "expect": { "confidence": "weakly_inferred", "source": "prefix_extension", "new_session": false, "same_session_as": 0, "boundary": null, "relation": "extension", "notes": ["front_layer_changed:system"] }
   },
-  { "append": [["a", 450, "tc-a4"], ["u", 610, "tc-u5"]], "expect": { "confidence": "strongly_inferred", "source": "prefix_extension", "new_session": false, "same_session_as": 4 } }
+  { "append": [["a", 450, "tc-a4"], ["u", 610, "tc-u5"]], "expect": { "confidence": "strongly_inferred", "source": "prefix_extension", "new_session": false, "same_session_as": 0, "notes": [] } }
  ],
- "expected_totals": { "sessions": 3, "boundaries": 0, "false_continuations": 0, "false_splits": 0 }
+ "expected_totals": { "sessions": 1, "boundaries": 0, "false_continuations": 0, "false_splits": 0 }
 }

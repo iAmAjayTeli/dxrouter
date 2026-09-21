@@ -146,22 +146,34 @@ describe("A3 — strong inference requires a proven extension", () => {
     expect(r.notes).toContain("candidates_all_divergent");
   });
 
-  it("refuses a candidate whose tools changed, even if the messages extend", () => {
+  it("keeps the lineage when tools change but the messages still extend", () => {
+    // The inversion of the old rule, and the point of the front-layer split: a client
+    // that gains a tool mid-conversation has changed its cacheable prefix, not become a
+    // different conversation. The lineage is claimed on the messages proof, the grade
+    // steps down because not every layer held, and the tools change is recorded.
     const r = resolveSessionIdentity({
       layers: layersFor(messages(4), { tools: [...TOOLS, { name: "run_shell" }] }),
       candidates: [candidateFor("s1", messages(2))],
     });
-    expect(r.action).toBe(RESOLUTION_ACTION.OPEN);
-    expect(r.notes).toContain("candidates_dropped_on_tools_or_system_change");
+    expect(r.action).toBe(RESOLUTION_ACTION.CONTINUE);
+    expect(r.session_id).toBe("s1");
+    expect(r.confidence).toBe(IDENTITY_CONFIDENCE.WEAKLY_INFERRED);
+    expect(r.source).toBe(IDENTITY_SOURCE.PREFIX_EXTENSION);
+    expect(r.labels).toContain(M1_LABELS.FRONT_LAYER_TRANSITION);
+    expect(r.invalidated).toEqual(["tools", "system", "messages"]);
+    expect(r.notes).not.toContain("candidates_dropped_on_tools_or_system_change");
   });
 
-  it("refuses a candidate whose system prompt changed", () => {
+  it("keeps the lineage when the system prompt changes but the messages still extend", () => {
     const r = resolveSessionIdentity({
       layers: layersFor(messages(4), { system: SYSTEM + " Be terse." }),
       candidates: [candidateFor("s1", messages(2))],
     });
-    expect(r.action).toBe(RESOLUTION_ACTION.OPEN);
-    expect(r.notes).toContain("candidates_dropped_on_tools_or_system_change");
+    expect(r.action).toBe(RESOLUTION_ACTION.CONTINUE);
+    expect(r.session_id).toBe("s1");
+    expect(r.confidence).toBe(IDENTITY_CONFIDENCE.WEAKLY_INFERRED);
+    expect(r.labels).toContain(M1_LABELS.FRONT_LAYER_TRANSITION);
+    expect(r.invalidated).toEqual(["system", "messages"]);
   });
 });
 

@@ -9,15 +9,33 @@
  * Resolution priority (section 2 of the M1 brief, section 4.2 of the architecture):
  *
  *   1. explicit    the client sent a validated X-DXR-Session key
- *   2. strong      exactly one open session has continuous tools and system hashes
- *                  AND the messages layer is a proven prefix extension of it
- *   3. weak        exactly one open session has continuous tools and system hashes
- *                  and the messages layer is genuinely undecidable (section 4.2:
- *                  "tools+system continuous, messages ambiguous")
+ *   2. strong      exactly one open session whose messages layer is a proven prefix
+ *                  extension of this turn, with tools and system also continuous
+ *   3. weak        exactly one open session whose messages layer is a proven prefix
+ *                  extension but whose tools and/or system changed across the
+ *                  boundary, OR exactly one whose tools+system are continuous and
+ *                  whose messages are genuinely undecidable (section 4.2 weak row)
  *   4. new         anything else, with identity_confidence = unknown
  *
- * The safety rule is FALSE SPLIT beats FALSE CONTINUATION, and it decides every
- * ambiguous case here:
+ * Lineage versus front-layer state — the distinction this file turns on:
+ *
+ *   The MESSAGES layer decides lineage. A byte-exact prefix continuation of a recorded
+ *   message chain is the proof, and nothing else is accepted as one.
+ *
+ *   `tools` and `system` are OBSERVED FRONT-LAYER STATE. They say what the cacheable
+ *   prefix looked like and which layers a boundary invalidated. They are not lineage
+ *   keys: an agent that gains an MCP tool halfway through a task has changed its prefix,
+ *   not become a different conversation.
+ *
+ *   Earlier this was conflated — front-layer equality was a membership precondition,
+ *   enforced in SQL and re-checked here — with the result that a tool-set change
+ *   excluded a session's own predecessor before any comparison could run. The change
+ *   then appeared as a new session row, and `invalidated_layers` could never contain
+ *   `tools` or `system`, so front-layer churn was unobservable in principle rather than
+ *   merely unobserved. The split is what makes the transition recordable.
+ *
+ * The safety rule is unchanged: FALSE SPLIT beats FALSE CONTINUATION, and it decides
+ * every ambiguous case here:
  *
  *  - Two or more open sessions could match? New session, `unknown`. Guessing which
  *    one would be a coin flip whose downside is asserting a warm prefix that another
@@ -182,8 +200,12 @@ function applyComparison(result, comparison) {
  *        session carrying that key, if any
  * @param {{id: string}|null} [args.explicitPredecessor] most recently CLOSED session
  *        carrying that key, used only to record lineage
- * @param {Array<{session: object, prefix: object}>} [args.candidates] open sessions
- *        whose tools and system hashes already match this turn, most recent first
+ * @param {Array<{session: object, prefix: object}>} [args.candidates] open sessions in
+ *        this project, most recent first. NOT pre-filtered on front-layer equality:
+ *        lineage is decided by the messages-layer proof below, and `tools`/`system`
+ *        are observed state
+ * @param {number} [args.candidateLimit] the cap the caller's query used, so a truncated
+ *        candidate set can be reported rather than mistaken for an absent predecessor
  * @param {object} [args.policy]
  * @returns {object} resolution (see baseResult for the shape)
  */
@@ -193,6 +215,7 @@ export function resolveSessionIdentity({
   explicitCandidate = null,
   explicitPredecessor = null,
   candidates = [],
+  candidateLimit = Number.POSITIVE_INFINITY,
   policy = DEFAULT_SESSION_POLICY,
 } = {}) {
   const result = baseResult(layers);
@@ -236,31 +259,91 @@ export function resolveSessionIdentity({
     return result;
   }
 
-  // ---- 2/3. Inference. Candidates are expected to arrive pre-filtered on tools+system
-  // continuity, which is the section 4.2 precondition for any inferred identity. The
-  // precondition is re-checked here rather than trusted: it is the whole difference
-  // between "same conversation" and "different agent in the same repository", and an
-  // invariant that lives in a SQL WHERE clause is not an invariant that can be tested.
+  // ---- 2/3. Inference.
+  //
+  // Candidates now arrive scoped by project only, NOT pre-filtered on front-layer
+  // equality, and the gate below is deliberately split in two:
+  //
+  //   * lineage is proven by the MESSAGES layer (a byte-exact prefix continuation).
+  //     That proof is what makes two turns the same conversation, and it holds whether
+  //     or not the client changed its tool set in between.
+  //   * `tools`/`system` are observed FRONT-LAYER STATE. A change across the boundary
+  //     invalidates the cacheable prefix and is recorded as such — it is not evidence
+  //     of a different conversation.
+  //
+  // Before this split, front-layer equality was a membership precondition (enforced in
+  // SQL and re-checked here), so an agent that gained an MCP tool mid-conversation had
+  // its own predecessor excluded before any comparison ran: the change surfaced as a new
+  // session and `invalidated_layers` could never contain `tools` or `system`. Front-layer
+  // churn was therefore structurally unobservable, which is the defect this fixes.
+  //
+  // What did NOT change is the fail-closed rule. Lineage still requires a proof, the
+  // proof is still hash equality over the message chain, and more than one plausible
+  // lineage is still refused rather than guessed. Nearest-in-time is never a tie-break.
   const compared = candidates.map((c) => ({ candidate: c, comparison: compareCandidate(c.prefix, layers, policy) }));
-  const continuous = compared.filter(
-    (c) => !c.comparison.invalidation.changed.includes("tools") && !c.comparison.invalidation.changed.includes("system"),
-  );
-  if (continuous.length < compared.length) result.notes.push("candidates_dropped_on_tools_or_system_change");
+  if (candidates.length >= candidateLimit) {
+    // The layer predicate used to bound this set. Without it the cap can be reached, and
+    // a true predecessor sitting past the cap would be invisible — a false split, which
+    // is the safe direction, but not one that may be silent.
+    result.notes.push(`candidate_limit_reached:${candidates.length}`);
+  }
 
-  const strong = continuous.filter((c) => isPrefixContinuation(c.comparison.relation.relation));
+  const frontContinuous = (c) =>
+    !c.comparison.invalidation.changed.includes("tools") && !c.comparison.invalidation.changed.includes("system");
+
+  // Strong lineage: the messages layer proves continuation. Front-layer state is
+  // recorded, not required.
+  const strong = compared.filter((c) => isPrefixContinuation(c.comparison.relation.relation));
   if (strong.length === 1) {
-    applyComparison(result, strong[0].comparison);
+    const chosen = strong[0];
+    applyComparison(result, chosen.comparison);
     result.action = RESOLUTION_ACTION.CONTINUE;
-    result.session_id = strong[0].candidate.session.id;
-    result.client_key = strong[0].candidate.session.client_key ?? null;
-    result.confidence = IDENTITY_CONFIDENCE.STRONGLY_INFERRED;
+    result.session_id = chosen.candidate.session.id;
+    result.client_key = chosen.candidate.session.client_key ?? null;
     result.source = IDENTITY_SOURCE.PREFIX_EXTENSION;
+    if (frontContinuous(chosen)) {
+      result.confidence = IDENTITY_CONFIDENCE.STRONGLY_INFERRED;
+    } else {
+      // §4.2 reserves `strongly_inferred` for "all three layer hashes continuous AND
+      // messages is a prefix-extension". The chain still proves the lineage, but not
+      // every layer held, so the grade steps down rather than the definition widening —
+      // an assumption must stay distinguishable from a measurement (I3/I4). The label
+      // and note say which layers moved; `invalidated_layers` carries them too.
+      //
+      // The grade is shared with the messages-indeterminate case further down, and
+      // `source` is what separates them: this branch is (weakly_inferred,
+      // prefix_extension) — lineage MEASURED, cacheable prefix broken — while that one
+      // is (weakly_inferred, ambiguous_prefix) — lineage ASSUMED, prefix intact. A
+      // consumer that cares which of the two it has reads the pair, never the grade
+      // alone. See IDENTITY_SOURCE in identity/confidence.js.
+      //
+      // Note what `invalidated_layers` will contain here: `messages` too, because the
+      // layers are nested and a changed tools layer relocates everything behind it. That
+      // is prefix-ordered cache invalidation, NOT a claim that the chain broke — the
+      // chain verdict is `relation: extension` with a null `divergence_index`, recorded
+      // on the same turn by `applyComparison` above.
+      result.confidence = IDENTITY_CONFIDENCE.WEAKLY_INFERRED;
+      result.labels.push(M1_LABELS.FRONT_LAYER_TRANSITION);
+      // Front layers only: `messages` is filtered out because this note names what
+      // MOVED, and including it would read as a divergence claim.
+      const front = chosen.comparison.invalidation.changed.filter((l) => l !== "messages");
+      result.notes.push(`front_layer_changed:${front.join("|")}`);
+    }
     return result;
   }
   if (strong.length > 1) {
+    result.labels.push(M1_LABELS.LINEAGE_AMBIGUOUS);
     result.notes.push("multiple_prefix_extension_candidates");
     return result;
   }
+
+  // No messages proof is available from any candidate. The remaining two readings —
+  // "compacted" and "undecidable" — rest on far weaker evidence, so they KEEP the
+  // front-layer precondition: without a chain proof, a differing tool set is the only
+  // thing left distinguishing this turn from an unrelated conversation, and merging on
+  // nothing would be exactly the false continuation the safety rule forbids.
+  const continuous = compared.filter(frontContinuous);
+  if (continuous.length < compared.length) result.notes.push("candidates_dropped_on_tools_or_system_change");
 
   const compacted = continuous.filter((c) => c.comparison.compaction.compaction);
   if (compacted.length === 1) {
@@ -281,6 +364,7 @@ export function resolveSessionIdentity({
     return result;
   }
   if (compacted.length > 1) {
+    result.labels.push(M1_LABELS.LINEAGE_AMBIGUOUS);
     result.notes.push("multiple_compaction_candidates");
     return result;
   }
@@ -301,6 +385,7 @@ export function resolveSessionIdentity({
     return result;
   }
   if (ambiguous.length > 1) {
+    result.labels.push(M1_LABELS.LINEAGE_AMBIGUOUS);
     result.notes.push("multiple_ambiguous_candidates");
     return result;
   }

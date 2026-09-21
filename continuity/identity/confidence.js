@@ -35,9 +35,34 @@ export const IDENTITY_CONFIDENCE_ORDER = Object.freeze([
 export const IDENTITY_SOURCE = Object.freeze({
   /** X-DXR-Session (or an equivalent client session header). */
   HEADER: "header",
-  /** All three layer hashes continuous and messages a proven prefix extension. */
+  /**
+   * The messages layer proved a prefix extension. That proof is what makes this a
+   * lineage, and it holds whether or not `tools`/`system` also held across the
+   * boundary — front-layer hashes are observed state, not a lineage key.
+   *
+   * So this source appears at TWO confidence grades, and the pair is the thing to
+   * read, never the grade alone:
+   *
+   *   (strongly_inferred, prefix_extension)  chain proven, all three layers continuous
+   *   (weakly_inferred,   prefix_extension)  chain proven, front layer moved — the turn
+   *                                          also carries `front-layer-transition` and
+   *                                          the moved layers in `invalidated_layers`
+   *
+   * `weakly_inferred` is deliberately shared with the row below, which is a different
+   * situation entirely (no chain proof at all). This field is what separates them: a
+   * consumer that needs "is the lineage proven?" must read the source, because the
+   * grade answers "did the cacheable prefix survive?" instead.
+   */
   PREFIX_EXTENSION: "prefix_extension",
-  /** tools+system continuous, messages genuinely undecidable (section 4.2 weak row). */
+  /**
+   * tools+system continuous, messages genuinely undecidable (section 4.2 weak row).
+   *
+   * The complement of the weak case above: the prefix is intact but the lineage is
+   * assumed rather than measured. Reached only when the messages question could not be
+   * asked — no recorded messages state, or a request with no messages layer — and the
+   * front-layer precondition is retained here precisely because nothing else is left
+   * to distinguish this turn from an unrelated conversation.
+   */
   AMBIGUOUS_PREFIX: "ambiguous_prefix",
   /**
    * A fresh session opened because the predecessor looks client-compacted. Typed but
@@ -64,6 +89,28 @@ export const M1_LABELS = Object.freeze({
   // field was removed (prefix/bookkeeping.js). Raised on the turn that was softened,
   // so a continuation is never asserted without saying why the strict test said no.
   PREFIX_CACHE_BREAKPOINT_MOVED: "prefix-cache-breakpoint-moved",
+  /**
+   * The lineage was proven by the messages chain while `tools` and/or `system`
+   * changed across the same boundary.
+   *
+   * Front-layer hashes are observed state, not a lineage key: a client that adds an
+   * MCP tool mid-conversation has changed its cacheable prefix, not become a different
+   * conversation. Before this label existed such a turn opened a NEW session, so the
+   * front-layer change was recorded only as the existence of another session row and
+   * `invalidated_layers` could never contain `tools` or `system`. The turn carrying
+   * this label is the one that makes that transition observable, and it always carries
+   * the changed layers in `invalidated_layers` beside it.
+   */
+  FRONT_LAYER_TRANSITION: "front-layer-transition",
+  /**
+   * More than one open lineage was plausible for this turn, so no lineage was claimed.
+   *
+   * Recorded rather than resolved: FALSE SPLIT beats FALSE CONTINUATION, and the
+   * alternative — picking the most recent, or the closest in time — is the approximate
+   * guess §4 forbids. A reader counting continuations must be able to see that this
+   * turn was censored rather than genuinely new.
+   */
+  LINEAGE_AMBIGUOUS: "lineage-ambiguous",
 });
 
 export function isIdentityConfidence(value) {

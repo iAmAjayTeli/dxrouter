@@ -8,6 +8,22 @@
  *   changed system   -> system, messages
  *   changed messages -> messages only, and only from the divergence point
  *
+ * `invalidated` is a CACHE INVALIDATION LIST, not a divergence report, and the
+ * difference matters most in the one case where it is easy to misread: a turn whose
+ * `tools` layer changed while its message chain continued cleanly records
+ * `tools,system,messages`. The `messages` entry there says "the cached blocks behind
+ * the tools layer are no longer reusable" — it does NOT say the messages layer
+ * diverged. It cannot, because the layers are physically nested in the request and a
+ * changed tool definition relocates every byte after it.
+ *
+ * The messages VERDICT is carried separately and always: `relation` and
+ * `divergence_index` on the same turn row (`extension` with a null index is a clean
+ * continuation, whatever this list contains). A reader that wants "did the
+ * conversation break?" reads those; a reader that wants "what must be re-sent to the
+ * provider?" reads this. `changed` sits between the two: it names only the layers whose
+ * hash actually moved, so `invalidated` minus `changed` is the set of layers that were
+ * invalidated purely by position.
+ *
  * M1 writes this down and stops there. No cache entry is created or expired, no
  * cache cost is computed, no route is ranked: that is M2 and later, and inventing it
  * here would be exactly the scope creep the milestone forbids.
@@ -20,8 +36,11 @@ import { PREFIX_LAYERS } from "./hasher.js";
 /**
  * @param {{tools_hash?: string|null, system_hash?: string|null, messages_hash?: string|null}} prev
  * @param {{tools_hash?: string|null, system_hash?: string|null, messages_hash?: string|null}} next
- * @returns {{changed: string[], invalidated: string[]}} both in tools, system,
- *          messages order — never sorted alphabetically, the order is semantic
+ * @returns {{changed: string[], invalidated: string[]}} `changed` = layers whose hash
+ *          moved; `invalidated` = those plus every layer behind the frontmost one, i.e.
+ *          what a cache must drop. Neither is a statement about message-chain
+ *          continuity. Both in tools, system, messages order — never sorted
+ *          alphabetically, the order is semantic.
  */
 export function invalidatedLayers(prev, next) {
   const changed = [];

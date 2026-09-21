@@ -91,6 +91,9 @@ function joinList(values) {
  * @param {boolean} [args.hashProjectPaths]
  * @param {string|null} [args.projectRootSalt]
  * @param {(ms:number)=>Promise<void>} [args.sleep]
+ * @param {number} [args.candidateLimit] how many open sessions in the project may be
+ *        considered as lineage candidates. Bounds the comparison cost; a truncated set
+ *        is reported on the turn rather than mistaken for "no predecessor".
  * @returns {Promise<object>} a content-free observation record
  */
 export async function observeTurn({
@@ -104,6 +107,7 @@ export async function observeTurn({
   hashProjectPaths = false,
   projectRootSalt = null,
   sleep = undefined,
+  candidateLimit = 20,
 } = {}) {
   const { db, sessions, prefixState } = store;
   const notes = [];
@@ -137,10 +141,14 @@ export async function observeTurn({
     if (open) explicitCandidate = { session: open, prefix: prefixState.getPrefixState(db, open.id) ?? {} };
     else explicitPredecessor = sessions.findLatestClosedByClientKey(db, explicitKey);
   } else {
-    candidates = sessions.findOpenCandidatesByLayers(db, {
+    // Lineage discovery, scoped by project only. The front-layer predicate that used to
+    // live in this query decided identity invisibly: a turn whose tool set had changed
+    // never saw its own predecessor, so the change could only ever be recorded as the
+    // existence of a new session. `project_root` is a scope here, never the proof —
+    // `resolveSessionIdentity` still requires a messages-layer prefix continuation.
+    candidates = sessions.findOpenCandidatesByProject(db, {
       projectRoot: root.project_root,
-      toolsHash: nextPrefix.tools_hash,
-      systemHash: nextPrefix.system_hash,
+      limit: candidateLimit,
     });
   }
 
@@ -150,6 +158,7 @@ export async function observeTurn({
     explicitCandidate,
     explicitPredecessor,
     candidates,
+    candidateLimit,
     policy,
   });
   notes.push(...resolution.notes);

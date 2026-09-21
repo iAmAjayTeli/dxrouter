@@ -73,42 +73,27 @@ export function findLatestClosedByClientKey(db, clientKey) {
 }
 
 /**
- * Open sessions in this project whose recorded tools AND system hashes match the
- * turn being observed — the §4.2 precondition for inferred identity, applied in SQL
- * so the engine never scans unrelated sessions. The resolver re-checks it anyway.
+ * The columns every candidate query selects, and the mapper that turns a flat row into
+ * the `{session, prefix}` pair the resolver compares.
  *
- * Rows come back as `{session, prefix}` pairs, most recently active first, so the
- * order is deterministic; the resolver refuses to choose between two matches, so
- * the order is for reporting rather than selection.
+ * Shared by both candidate queries on purpose: the layer-scoped and project-scoped
+ * lookups must hand the resolver byte-identical shapes, or a candidate would be judged
+ * differently depending on which query found it. `final_digest_norm` and
+ * `penultimate_digest_norm` are selected here as well as in prefixStateRepo because
+ * this is the *inferred* path: a candidate that arrives without them can only be judged
+ * strictly, which is how the moved-cache-breakpoint rule silently stopped applying to
+ * real traffic.
  */
-export function findOpenCandidatesByLayers(db, { projectRoot, toolsHash, systemHash, limit = 20 } = {}) {
-  const rows =
-    db.all(
-      `SELECT s.id AS s_id, s.project_root, s.project_root_hashed, s.identity_confidence,
+const CANDIDATE_COLUMNS = `s.id AS s_id, s.project_root, s.project_root_hashed, s.identity_confidence,
               s.identity_source, s.client_key, s.predecessor_id, s.state, s.opened_at,
               s.last_seen_at, s.turn_count, s.closed_at, s.close_reason,
               p.turn_idx, p.updated_at, p.tools_hash, p.system_hash, p.messages_hash,
               p.message_count, p.tools_tokens, p.system_tokens, p.messages_tokens,
               p.digests_json, p.digests_truncated,
-              -- The boundary re-test's inputs. Selected here as well as in
-              -- prefixStateRepo because this is the *inferred* path: a candidate that
-              -- arrives without them can only be judged strictly, which is how the
-              -- moved-cache-breakpoint rule silently stopped applying to real traffic.
-              -- penultimate_digest_norm is rule r2's second position; omitting it here
-              -- would reintroduce exactly that failure for the two-position window.
-              p.final_digest_norm, p.penultimate_digest_norm, p.prefix_rule_version
-         FROM sessions s
-         JOIN session_prefix p ON p.session_id = s.id
-        WHERE s.closed_at IS NULL
-          AND s.project_root = ?
-          AND p.tools_hash IS ?
-          AND p.system_hash IS ?
-        ORDER BY s.last_seen_at DESC, s.opened_at DESC
-        LIMIT ?`,
-      [projectRoot, toolsHash ?? null, systemHash ?? null, limit],
-    ) || [];
+              p.final_digest_norm, p.penultimate_digest_norm, p.prefix_rule_version`;
 
-  return rows.map((r) => ({
+function mapCandidate(r) {
+  return {
     session: {
       id: r.s_id,
       project_root: r.project_root,
@@ -141,7 +126,74 @@ export function findOpenCandidatesByLayers(db, { projectRoot, toolsHash, systemH
       penultimate_digest_norm: r.penultimate_digest_norm ?? null,
       prefix_rule_version: r.prefix_rule_version ?? null,
     },
-  }));
+  };
+}
+
+/**
+ * Open sessions in this project whose recorded tools AND system hashes match the
+ * turn being observed.
+ *
+ * Retained for callers that genuinely want front-layer-scoped candidates (and for the
+ * tests that pin that behaviour). It is NO LONGER the lookup the observer uses for
+ * inferred identity: requiring exact front-layer equality here meant a conversation
+ * that added an MCP tool mid-flight had its own predecessor filtered out before any
+ * comparison could run, so the change surfaced as a new session rather than as a
+ * recorded front-layer invalidation. See `findOpenCandidatesByProject`.
+ *
+ * Rows come back as `{session, prefix}` pairs, most recently active first, so the
+ * order is deterministic; the resolver refuses to choose between two matches, so
+ * the order is for reporting rather than selection.
+ */
+export function findOpenCandidatesByLayers(db, { projectRoot, toolsHash, systemHash, limit = 20 } = {}) {
+  const rows =
+    db.all(
+      `SELECT ${CANDIDATE_COLUMNS}
+         FROM sessions s
+         JOIN session_prefix p ON p.session_id = s.id
+        WHERE s.closed_at IS NULL
+          AND s.project_root = ?
+          AND p.tools_hash IS ?
+          AND p.system_hash IS ?
+        ORDER BY s.last_seen_at DESC, s.opened_at DESC
+        LIMIT ?`,
+      [projectRoot, toolsHash ?? null, systemHash ?? null, limit],
+    ) || [];
+
+  return rows.map(mapCandidate);
+}
+
+/**
+ * Open sessions in this project, whatever their recorded front-layer hashes are.
+ *
+ * This is lineage *discovery*, deliberately separated from front-layer *compatibility*:
+ * the question "could this turn belong to an existing lineage?" is answered by the
+ * messages-layer prefix proof in the resolver, not by tools/system equality in SQL. A
+ * predicate that cannot be reached by a test is not an invariant, and this one was
+ * silently deciding identity.
+ *
+ * `project_root` remains as a scope, not as identity. It bounds how many rows the
+ * engine has to compare and keeps two unrelated repositories apart; it never on its own
+ * makes two turns the same lineage — that still requires the prefix proof, which is why
+ * an unrelated conversation in the same project is still a new session.
+ *
+ * Ordering is `last_seen_at DESC` for determinism and reporting only. The resolver
+ * refuses to choose when more than one candidate is plausible, so "most recent" never
+ * becomes a tie-break: nearest-in-time is not evidence of lineage.
+ */
+export function findOpenCandidatesByProject(db, { projectRoot, limit = 20 } = {}) {
+  const rows =
+    db.all(
+      `SELECT ${CANDIDATE_COLUMNS}
+         FROM sessions s
+         JOIN session_prefix p ON p.session_id = s.id
+        WHERE s.closed_at IS NULL
+          AND s.project_root = ?
+        ORDER BY s.last_seen_at DESC, s.opened_at DESC
+        LIMIT ?`,
+      [projectRoot, limit],
+    ) || [];
+
+  return rows.map(mapCandidate);
 }
 
 function safeParseArray(json) {
@@ -246,6 +298,7 @@ export default {
   findOpenByClientKey,
   findLatestClosedByClientKey,
   findOpenCandidatesByLayers,
+  findOpenCandidatesByProject,
   updateSessionActivity,
   closeSession,
   listIdleOpenSessions,
