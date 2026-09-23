@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   validateApiKey: vi.fn(),
   getConsistentMachineId: vi.fn(),
   verifyDashboardAuthToken: vi.fn(),
+  killAppProcesses: vi.fn(),
 }));
 
 vi.mock("next/server", () => ({
@@ -38,6 +39,12 @@ vi.mock("@/shared/utils/machineId", () => ({
 
 vi.mock("@/lib/auth/dashboardSession", () => ({
   verifyDashboardAuthToken: mocks.verifyDashboardAuthToken,
+}));
+
+// The shutdown route's only side effect, stubbed so the negative assertions ("nothing was
+// killed") are observations rather than the absence of a crash.
+vi.mock("@/lib/appUpdater", () => ({
+  killAppProcesses: mocks.killAppProcesses,
 }));
 
 const { proxy, __test__ } = await import("@/dashboardGuard.js");
@@ -190,7 +197,7 @@ describe("deny by default", () => {
 
   it("requires a session for the always-protected routes even with login disabled", async () => {
     mocks.getSettings.mockResolvedValue({ ...SECURE_DEFAULTS, requireLogin: false });
-    for (const p of ["/api/shutdown", "/api/settings/database", "/api/version/update"]) {
+    for (const p of ["/api/shutdown", "/api/settings/database", "/api/version/update", "/api/version/shutdown"]) {
       expect((await proxy(loopback(p))).status, p).toBe(401);
     }
   });
@@ -215,6 +222,113 @@ describe("deny by default", () => {
     const res = await proxy(remote("/dashboard"));
     expect(res.status).toBe(307);
     expect(res.url).toMatch(/\/login$/);
+  });
+});
+
+/**
+ * Shutting the installation down is the most process-destructive thing the HTTP surface
+ * can do: the route terminates every process ownership proved is ours and then exits the
+ * server. It was only session-protected, so an operator who reached the dashboard over a
+ * tunnel could shut the host down from anywhere — while strictly lesser routes
+ * (`/api/tunnel/tailscale-check`, `/api/mcp/`) were already loopback-only.
+ *
+ * These cases run the real guard and then, only when the guard allows it, the real route,
+ * which is how the deployed pipeline composes them. That is what makes the negative
+ * assertion meaningful: `killAppProcesses` is not merely un-asserted on a rejected
+ * request, it is unreachable.
+ */
+describe("shutdown is local-only and authenticated", () => {
+  /** Mirrors the deployed order: the guard runs first, and the handler runs only if it passed. */
+  async function pipeline(request) {
+    const decision = await proxy(request);
+    if (decision !== mocks.next) return { allowed: false, decision };
+    const { POST } = await import("@/app/api/version/shutdown/route.js");
+    return { allowed: true, decision, response: await POST() };
+  }
+
+  beforeEach(() => {
+    mocks.killAppProcesses.mockClear();
+    mocks.killAppProcesses.mockResolvedValue({ processes: [], pids: [] });
+  });
+
+  it("rejects an unauthenticated caller, and kills nothing", async () => {
+    const { allowed, decision } = await pipeline(loopback("/api/version/shutdown"));
+
+    expect(allowed).toBe(false);
+    expect(decision.status).toBe(403);
+    expect(mocks.killAppProcesses).not.toHaveBeenCalled();
+  });
+
+  it("rejects an authenticated caller from a non-loopback peer, and kills nothing", async () => {
+    mocks.verifyDashboardAuthToken.mockResolvedValue(true);
+    const { allowed, decision } = await pipeline(withCookie(remote("/api/version/shutdown"), "jwt"));
+
+    // A valid session used to be sufficient. It no longer is: the peer has to be local,
+    // because nothing this route does is meaningful to a remote caller.
+    expect(allowed).toBe(false);
+    expect(decision.status).toBe(403);
+    expect(decision.body.error).toMatch(/Local only/);
+    expect(mocks.killAppProcesses).not.toHaveBeenCalled();
+  });
+
+  it("rejects a loopback socket that is really a proxy hop, and kills nothing", async () => {
+    mocks.verifyDashboardAuthToken.mockResolvedValue(true);
+    const viaProxy = withCookie(loopback("/api/version/shutdown"), "jwt");
+    viaProxy.headers.set("x-9r-via-proxy", "1");
+
+    const { allowed, decision } = await pipeline(viaProxy);
+
+    expect(allowed).toBe(false);
+    expect(decision.status).toBe(403);
+    expect(mocks.killAppProcesses).not.toHaveBeenCalled();
+  });
+
+  it("rejects a tunnelled browser whose Origin is not loopback, and kills nothing", async () => {
+    mocks.verifyDashboardAuthToken.mockResolvedValue(true);
+    const tunnelled = withCookie(
+      loopback("/api/version/shutdown", { origin: "https://router.example.com" }),
+      "jwt"
+    );
+
+    const { allowed, decision } = await pipeline(tunnelled);
+
+    expect(allowed).toBe(false);
+    expect(decision.status).toBe(403);
+    expect(mocks.killAppProcesses).not.toHaveBeenCalled();
+  });
+
+  it("still lets the local dashboard shut the installation down", async () => {
+    // The regression that matters in the other direction: the two dashboard callers
+    // (profile page, header menu) are same-origin fetches from a loopback browser, and
+    // they must keep working.
+    mocks.verifyDashboardAuthToken.mockResolvedValue(true);
+    vi.useFakeTimers(); // the route schedules process.exit; never let it fire
+
+    try {
+      const { allowed, response } = await pipeline(withCookie(loopback("/api/version/shutdown"), "jwt"));
+
+      expect(allowed).toBe(true);
+      expect(response.body.success).toBe(true);
+      expect(mocks.killAppProcesses).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it("still accepts the CLI's machine token from the host", async () => {
+    vi.useFakeTimers();
+    try {
+      const { allowed } = await pipeline(
+        loopback("/api/version/shutdown", { "x-9r-cli-token": CLI_TOKEN })
+      );
+
+      expect(allowed).toBe(true);
+      expect(mocks.killAppProcesses).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
   });
 });
 

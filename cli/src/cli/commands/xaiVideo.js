@@ -13,7 +13,10 @@ const https = require("https");
 const fs = require("fs");
 const path = require("path");
 
-const DEFAULT_PORT = 20128;
+// DXRouter's default loopback port. Upstream's 20128 is deliberately not a fallback: it
+// belongs to a separate installation that may be running on the same machine, so this
+// subcommand would talk to the wrong gateway. Mirrors `DEFAULT_PORT` in cli.js.
+const DEFAULT_PORT = 20127;
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_MODEL = "xai/grok-imagine-video";
 const DEFAULT_TIMEOUT_SEC = 600;

@@ -310,16 +310,15 @@ function buildCliPackage() {
     console.log("⏭️  No MITM files found\n");
   }
 
-  // Step 7b: Copy standalone updater (headless Node process for install progress)
-  console.log("7️⃣ b Copying updater files...");
-  const updaterSrc = path.join(appDir, "src", "lib", "updater");
-  const updaterDest = path.join(cliAppDir, "src", "lib", "updater");
-  if (fs.existsSync(updaterSrc)) {
-    copyRecursive(updaterSrc, updaterDest);
-    console.log("✅ Copied updater files\n");
-  } else {
-    console.log("⏭️  No updater files found\n");
-  }
+  // Step 7b: (removed) a standalone updater used to be copied here.
+  //
+  // `src/lib/updater/updater.js` ran `npm i -g <package>` in a detached process and could
+  // relaunch an arbitrary command afterwards. Nothing in the app spawned it any more —
+  // `/api/version/update` refuses, because DXRouter has no release channel and so no
+  // provable update target — but this step kept shipping it inside the published CLI,
+  // where its only guard against installing the wrong product was a single exact-string
+  // comparison against the upstream package name. It was deleted rather than hardened; a
+  // future release channel would bring its own installer with a proven target.
 
   // Step 8: Build MITM server (config driven - see app/cli/scripts/buildMitm.js)
   console.log("8️⃣  Building MITM server...");

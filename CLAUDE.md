@@ -110,7 +110,7 @@ Implemented in `src/lib/security/` and wired from `src/instrumentation.js`. Five
 - **Diagnostics off by default, redaction unconditional.** `enableObservability` and `persistRequestBodies` are two independent switches, both default `false`. `src/lib/security/redact.js` has no disable flag; every diagnostic writer routes through it. Persisted rows use `drop: true` (the key is absent, not masked).
 
 ### One data root
-`src/lib/dataDir.js` is the only resolver: `DXR_DATA_DIR` → `DATA_DIR` (deprecated, warns) → platform default. Everything derives from it — db, logs, backups, MITM state, tailscale state, keyfile, credential file. `tests/security/data-root.test.js` scans `src/`, `open-sse/` and `continuity/` for any module deriving its own root and fails if one appears. Exactly three files may duplicate the precedence, because they cannot import the alias: `src/mitm/paths.js` (CommonJS child process), `src/lib/updater/updater.js` (copied out and run by bare node), and `dataDir.js` itself. Each must say `DXR_DATA_DIR` and "kept in step".
+`src/lib/dataDir.js` is the only resolver: `DXR_DATA_DIR` → `DATA_DIR` (deprecated, warns) → platform default. Everything derives from it — db, logs, backups, MITM state, tailscale state, keyfile, credential file. `tests/security/data-root.test.js` scans `src/`, `open-sse/` and `continuity/` for any module deriving its own root and fails if one appears. Exactly two files may duplicate the precedence, because they cannot import the alias: `src/mitm/paths.js` (CommonJS child process) and `dataDir.js` itself. Each must say `DXR_DATA_DIR` and "kept in step".
 
 ### The continuity boundary (I1)
 `continuity/` is the new engine. It may import only its own tree and `node:` builtins — never `open-sse`, `@/`, `next/`, or a relative path that escapes upward. `scripts/check-import-boundary.mjs` enforces this (static imports, `require()`, dynamic `import()`, ignoring comments) and CI runs it as its own job. To let the engine see something new, widen a port in `continuity/ports/` and implement it in the adapters — do not add an import.
@@ -123,7 +123,7 @@ Byte-identical behaviour is **not** claimed. These differ on purpose:
 2. Loopback callers must authenticate. Three tests in `tests/unit/dashboard-guard.test.js` and seven in `tests/unit/local-request-peer-trust-3294.test.js` were updated to assert the new default plus the loopback-only opt-out.
 3. Observability is opt-in and request bodies are a second opt-in. `tests/unit/request-details-tab.test.js` now enables both explicitly.
 4. Provider credentials are encrypted on import and stay enveloped on export.
-5. `src/lib/appUpdater.js` and `src/lib/mitmAliasCache.js` used to re-derive `~/.9router`; both now use the configured root, as do `src/mitm/paths.js` and `src/lib/updater/updater.js`.
+5. `src/lib/appUpdater.js` and `src/lib/mitmAliasCache.js` used to re-derive `~/.9router`; both now use the configured root, as does `src/mitm/paths.js`. (`src/lib/updater/updater.js` was the fourth; it has since been deleted with the self-install path.)
 6. A non-loopback or wildcard bind that used to start silently now refuses.
 
 <!-- BEGIN:nextjs-agent-rules -->

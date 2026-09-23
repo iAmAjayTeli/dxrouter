@@ -84,6 +84,13 @@ const LOCAL_ONLY_PATHS = [
   "/api/headroom/start",
   "/api/headroom/stop",
   "/api/headroom/proxy",
+  // Terminates this installation's processes and then exits the server. It belongs here
+  // by the rule above — it is the most process-destructive route in the app — and it was
+  // the only one of its kind that was merely session-protected, so an authenticated
+  // operator reaching the dashboard over a tunnel could shut the host down remotely.
+  // Everything this route can do is a local-maintenance action, so a local peer is a
+  // precondition rather than a restriction.
+  "/api/version/shutdown",
 ];
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);

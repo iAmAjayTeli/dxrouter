@@ -1,35 +1,50 @@
 import pkg from "../../../package.json" with { type: "json" };
+import { DXR_DEFAULT_APP_PORT, DXR_IDENTITY } from "./dxrouterIdentity.js";
 
 // App configuration
 export const APP_CONFIG = {
-  name: "9Router Proxy",
+  name: `${DXR_IDENTITY.displayName} Proxy`,
   description: "AI Infrastructure Management",
   version: pkg.version,
 };
 
 // GitHub configuration
 export const GITHUB_CONFIG = {
-  changelogUrl: "https://raw.githubusercontent.com/decolua/9router/refs/heads/master/CHANGELOG.md",
+  changelogUrl: DXR_IDENTITY.changelogUrl,
+  /**
+   * Upstream 9Router's donation endpoint, inherited with the fork and deliberately kept.
+   *
+   * It is not an update channel: no version, package or code is fetched through it. It is
+   * a funding link, and `DonateModal.js` fetches it to render the panel's contents. The
+   * alternatives were both worse than keeping it — removing it breaks a working feature
+   * this milestone has no mandate to change, and pointing it at a DXRouter endpoint would
+   * invent a URL that does not exist and break the modal differently.
+   *
+   * Two things a future reader should know rather than re-derive. It is the one remaining
+   * upstream URL in this file, pinned by name in
+   * `tests/unit/dxr-updater-identity.test.js` so a second cannot appear unnoticed. And it
+   * is an outbound call to infrastructure this project does not operate, which sits
+   * against FINAL-ARCHITECTURE §14.2 ("nothing leaves the machine") — it fires only when
+   * the operator opens the donate modal, so it is user-initiated rather than telemetry,
+   * but whoever gives DXRouter its own funding link should replace this and delete this
+   * comment.
+   */
   donateUrl: "https://9router.com/api/donate",
 };
 
-// Updater configuration
+// Updater configuration.
+//
+// Reduced to the one field that is still a fact. The package name, install commands,
+// status port and install/wait tuning all described a self-install path that no longer
+// exists: DXRouter publishes no release channel, so its routes refuse to update and
+// there is no command to offer (see `@/shared/constants/dxrouterIdentity`). Anything
+// reinstating a package name here would have to come with a real release channel and a
+// proof that the target is DXRouter's — `npm i -g dxrouter` currently resolves to an
+// unrelated npm package.
 export const UPDATER_CONFIG = {
-  npmPackageName: "9router",
-  installCmd: "npm i -g 9router",
-  installCmdLatest: "npm i -g 9router@latest --prefer-online",
-  shutdownCountdownSec: 3,
-  exitDelayMs: 500,
-  statusPort: 20129,
-  statusPollIntervalMs: 1000,
-  statusLogTailLines: 8,
-  installRetries: 3,
-  installRetryDelayMs: 5000,
-  lingerAfterDoneMs: 30000,
-  waitForExitMinMs: 5000,
-  waitForExitMaxMs: 20000,
-  waitForExitCheckMs: 500,
-  appPort: 20128,
+  /** Default loopback port. The port an instance actually bound is `PORT` — resolve it
+   * with `@/lib/dxrInstallation`'s `resolveOwnPort()` rather than reading this. */
+  appPort: DXR_DEFAULT_APP_PORT,
 };
 
 // Theme configuration

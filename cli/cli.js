@@ -89,10 +89,29 @@ try { ensureSqliteRuntime({ silent: true }); } catch {}
 try { ensureTrayRuntime({ silent: true }); } catch {}
 
 // Configuration constants
+//
+// Package identity comes from this package's own manifest and never from a literal here.
+// The CLI is published separately from the app (see `files` in cli/package.json — the repo
+// root and its `src/` are not shipped), so it cannot import the app's canonical identity
+// module. `pkg.name` and `pkg.repository` are therefore its single source, which is the
+// reason this file no longer contains an installable package name at all.
 const APP_NAME = pkg.name; // Use from package.json
-const INSTALL_CMD_LATEST = `npm i -g ${APP_NAME}@latest --prefer-online`;
+const PACKAGE_REPOSITORY = typeof pkg.repository === "string"
+  ? pkg.repository
+  : (pkg.repository && pkg.repository.url) || "";
 
-const DEFAULT_PORT = 20128;
+// "https://github.com/owner/repo.git" and "git@github.com:owner/repo.git" -> "owner/repo"
+const REPO_SLUG = (() => {
+  const m = String(PACKAGE_REPOSITORY).match(/github\.com[/:]([^/]+\/[^/#?]+?)(?:\.git)?\/?$/i);
+  return m ? m[1] : "";
+})();
+const RELEASES_API = REPO_SLUG ? `https://api.github.com/repos/${REPO_SLUG}/releases/latest` : "";
+const RELEASES_PAGE = REPO_SLUG ? `https://github.com/${REPO_SLUG}/releases` : "";
+
+// DXRouter's default loopback port. Upstream's 20128 is deliberately not a fallback: it
+// belongs to a separate installation that may be running on the same machine, and a CLI
+// that defaulted to it would start, probe and kill the wrong server.
+const DEFAULT_PORT = 20127;
 // Loopback by default. Binding all interfaces exposes the LLM API, the dashboard
 // and every stored provider credential to the local network, so it is opt-in
 // (DXR_ALLOW_NETWORK=1) rather than the default.
@@ -124,10 +143,6 @@ function getDisplayHost() {
   return isLoopbackHost(host) || WILDCARD_HOSTS.has(String(host).toLowerCase()) ? "localhost" : host;
 }
 const MAX_PORT_ATTEMPTS = 10;
-// Identifiers for killAllAppProcesses - only kill 9router specifically
-const PROCESS_IDENTIFIERS = [
-  '9router'  // Only package name - avoid killing other apps
-];
 
 // Parse arguments
 let port = DEFAULT_PORT;
@@ -186,6 +201,16 @@ if (skipUpdate && !trayMode && !process.stdin.isTTY) {
   process.env.TRAY_MODE = "1";
 }
 
+// Point the CLI's internal API client at the server *this* process starts.
+//
+// `src/cli/api/client.js` carries its own default port, and it is upstream's 20128 — a
+// port that on this machine may belong to a different installation entirely. Most of the
+// CLI reaches the client through the terminal UI, which configures it; the tunnel check
+// below does not, so without this it would ask a different gateway (or nothing) whether a
+// tunnel is running and silently report "no tunnel". Configured once here, after the port
+// is final and before anything reads it.
+require("./src/cli/api/client").configure({ port });
+
 // Always use Node.js runtime with absolute path
 const RUNTIME = process.execPath;
 
@@ -235,133 +260,15 @@ function killTunnelByPidFile() {
   killByPidFile(path.join(tunnelDir, "tailscale.pid"));
 }
 
-// Kill cloudflared whose --url targets this app's port (covers stale PID file case)
-function killCloudflaredByAppPort(appPort) {
-  if (!appPort) return [];
-  const portMatchers = [`localhost:${appPort}`, `127.0.0.1:${appPort}`];
-  const pids = [];
-  try {
-    if (process.platform === "win32") {
-      const psCmd = `powershell -NonInteractive -WindowStyle Hidden -Command "Get-WmiObject Win32_Process -Filter 'Name=\\"cloudflared.exe\\"' | Select-Object ProcessId,CommandLine | ConvertTo-Csv -NoTypeInformation"`;
-      const output = execSync(psCmd, { encoding: "utf8", windowsHide: true, timeout: 5000 });
-      const lines = output.split("\n").slice(1).filter(l => l.trim());
-      lines.forEach(line => {
-        if (portMatchers.some(m => line.includes(m))) {
-          const match = line.match(/^"(\d+)"/);
-          if (match && match[1]) pids.push(match[1]);
-        }
-      });
-    } else {
-      const output = execSync("ps -eo pid,command 2>/dev/null", { encoding: "utf8", timeout: 5000 });
-      output.split("\n").forEach(line => {
-        if (line.includes("cloudflared") && portMatchers.some(m => line.includes(m))) {
-          const parts = line.trim().split(/\s+/);
-          const pid = parts[0];
-          if (pid && !isNaN(pid)) pids.push(pid);
-        }
-      });
-    }
-  } catch { }
-  return pids;
+// Helper processes this installation started, reached only through the PID files they
+// write under our own data root. Nothing here is selected by process name: the data root
+// is what proves the record is ours, and a name match cannot distinguish our cloudflared
+// from one belonging to another installation on the same machine.
+function killAuxiliaryByPidFile() {
+  try { killProxyByPidFile(); } catch { /* best effort */ }
+  try { killTunnelByPidFile(); } catch { /* best effort */ }
 }
 
-// Kill all 9router processes
-function killAllAppProcesses(appPort) {
-  return new Promise((resolve) => {
-    try {
-      // Background: MITM + tunnel/cloudflared run on separate ports/processes —
-      // killing them doesn't free the app port, so don't block the critical path.
-      // Server-side MITM manager has stale-lock recovery and starts deferred (~3s).
-      setImmediate(() => {
-        try { killProxyByPidFile(); } catch {}
-        try { killTunnelByPidFile(); } catch {}
-        try { killCloudflaredByAppPort(appPort); } catch {}
-      });
-
-      const platform = process.platform;
-      let pids = [];
-
-      if (platform === "win32") {
-        // Windows: use WMI to get full CommandLine (tasklist /V doesn't include it)
-        try {
-          const psCmd = `powershell -NonInteractive -WindowStyle Hidden -Command "Get-WmiObject Win32_Process -Filter 'Name=\\"node.exe\\"' | Select-Object ProcessId,CommandLine | ConvertTo-Csv -NoTypeInformation"`;
-          const output = execSync(psCmd, {
-            encoding: "utf8",
-            windowsHide: true,
-            timeout: 5000
-          });
-          const lines = output.split("\n").slice(1).filter(l => l.trim());
-          lines.forEach(line => {
-            // Whitelist: real node process running 9router/cli.js, or next-server.
-            // Avoids killing editors/grep/strace/cursor that just have "9router" in cmdline.
-            const cmd = line.toLowerCase();
-            const isAppProcess =
-              (cmd.includes("node") && cmd.includes("9router") && (cmd.includes("cli.js") || cmd.includes("\\9router") || cmd.includes("/9router")))
-              || cmd.includes("next-server");
-            if (isAppProcess) {
-              const match = line.match(/^"(\d+)"/);
-              if (match && match[1] && match[1] !== process.pid.toString()) {
-                pids.push(match[1]);
-              }
-            }
-          });
-        } catch (e) {
-          // No processes found or error - continue
-        }
-      } else {
-        // macOS/Linux: use ps to find all matching processes
-        try {
-          const output = execSync('ps aux 2>/dev/null', {
-            encoding: 'utf8',
-            timeout: 5000
-          });
-          const lines = output.split('\n');
-
-          lines.forEach(line => {
-            // Whitelist: real node process running 9router/cli.js, or next-server.
-            // Avoids killing grep/strace/editors/cursor that incidentally match "9router".
-            const cmd = line.toLowerCase();
-            const isAppProcess =
-              (cmd.includes("node") && cmd.includes("9router") && (cmd.includes("cli.js") || cmd.includes("/9router")))
-              || cmd.includes("next-server");
-            if (isAppProcess) {
-              const parts = line.trim().split(/\s+/);
-              const pid = parts[1];
-              if (pid && !isNaN(pid) && pid !== process.pid.toString()) {
-                pids.push(pid);
-              }
-            }
-          });
-        } catch (e) {
-          // No processes found or error - continue
-        }
-      }
-
-      // Kill all found processes
-      if (pids.length > 0) {
-        pids.forEach(pid => {
-          try {
-            if (platform === "win32") {
-              execSync(`taskkill /F /PID ${pid} 2>nul`, { stdio: 'ignore', shell: true, windowsHide: true, timeout: 3000 });
-            } else {
-              execSync(`kill -9 ${pid} 2>/dev/null`, { stdio: 'ignore', timeout: 3000 });
-            }
-          } catch (err) {
-            // Process already dead or can't kill - continue
-          }
-        });
-
-        // Wait for processes to fully terminate
-        setTimeout(() => resolve(), 1000);
-      } else {
-        resolve();
-      }
-    } catch (err) {
-      // Silent fail - continue anyway
-      resolve();
-    }
-  });
-}
 
 // Sleep helper using SharedArrayBuffer wait (sync, no busy-loop)
 function sleepSync(ms) {
@@ -501,14 +408,38 @@ function checkForUpdate() {
       resolve(version);
     };
 
-    const req = https.get(`https://registry.npmjs.org/${pkg.name}/latest`, { timeout: 3000 }, (res) => {
+    // Ask this package's own release channel. This used to read
+    // `registry.npmjs.org/${pkg.name}/latest`, which for a CLI named after its upstream
+    // answered with *upstream's* newest version — so the menu offered an update that
+    // installed a different product over the top of this one.
+    //
+    // No repository in the manifest (or no release published yet) means there is nothing
+    // to compare against, and the honest answer is "no update" rather than a fallback.
+    if (!RELEASES_API) {
+      done(null);
+      return;
+    }
+
+    const req = https.get(RELEASES_API, {
+      timeout: 3000,
+      headers: {
+        // GitHub rejects requests without one, which would otherwise look like an outage.
+        "User-Agent": `${pkg.name}-update-check`,
+        Accept: "application/vnd.github+json",
+      },
+    }, (res) => {
+      if (res.statusCode !== 200) {
+        res.resume();
+        done(null);
+        return;
+      }
       let data = "";
       res.on("data", chunk => data += chunk);
       res.on("end", () => {
         try {
-          const latest = JSON.parse(data);
-          if (latest.version && compareVersions(latest.version, pkg.version) > 0) {
-            done(latest.version);
+          const tag = String(JSON.parse(data)?.tag_name || "").trim().replace(/^v/i, "");
+          if (tag && compareVersions(tag, pkg.version) > 0) {
+            done(tag);
           } else {
             done(null);
           }
@@ -558,10 +489,16 @@ if (!fs.existsSync(serverPath)) {
 }
 
 // Start server immediately; run update check in parallel (not on the critical path).
+//
+// Cleanup before start is own-port plus our own PID files, never a process-name sweep.
+// The sweep this replaces matched `9router`, `next-server` and `cli.js` anywhere in a
+// command line, which on a machine also running an upstream 9Router install (20128)
+// meant starting one CLI killed the other installation's server — and could equally miss
+// this one, since a Windows command line names the entry script rather than the string
+// `next-server`.
 const updatePromise = checkForUpdate();
-killAllAppProcesses(port)
-  .then(() => killProcessOnPort(port))
-  .then(() => startServer(updatePromise));
+killAuxiliaryByPidFile();
+killProcessOnPort(port).then(() => startServer(updatePromise));
 
 // Show interface selection menu
 async function showInterfaceMenu(latestVersion) {
@@ -787,11 +724,16 @@ function startServer(updatePromise) {
           isShuttingDown = true;
           const { clearScreen } = require("./src/cli/utils/display");
           clearScreen();
-          console.log(`\n⬆  Update v${pkg.version} → v${latestVersion}\n`);
-          console.log(`Run this after exit:\n`);
-          console.log(`   \x1b[33m${INSTALL_CMD_LATEST}\x1b[0m\n`);
+          console.log(`\n⬆  DXRouter v${pkg.version} → v${latestVersion}\n`);
+          // No install command is printed, because there is no package to install: this
+          // CLI runs from a git checkout, and the only correct way to move it forward is
+          // git. It used to print `npm i -g <upstream>@latest --prefer-online` and then
+          // tell the operator to "run it again" — which installed upstream over the
+          // global install and left this checkout exactly where it was.
+          console.log(`This installation runs from a source checkout, so there is no`);
+          console.log(`package to install. Update it with git and start it again.\n`);
+          console.log(`   \x1b[33m${RELEASES_PAGE}\x1b[0m\n`);
           cleanup();
-          await killAllAppProcesses(port);
           await killProcessOnPort(port);
           setTimeout(() => process.exit(0), 200);
           return;

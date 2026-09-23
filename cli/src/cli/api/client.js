@@ -7,9 +7,14 @@ const os = require("node:os");
 const { machineIdSync } = require("node-machine-id");
 
 // Default configuration
+//
+// 20127 is DXRouter's loopback port, not upstream's 20128 — that one belongs to a
+// separate installation that may be running on the same machine. Every entry point
+// configures the port explicitly (`cli.js`, `terminalUI.js`); this is only the value
+// used if something reaches the client without doing so.
 const DEFAULT_CONFIG = {
   host: "localhost",
-  port: 20128,
+  port: 20127,
   protocol: "http:",
 };
 
@@ -226,9 +231,14 @@ async function getProviderModels(id) {
  */
 async function getOAuthAuthUrl(provider) {
   // Codex requires fixed port 1455 and path /auth/callback
-  const redirectUri = provider === "codex" 
+  //
+  // Every other provider returns to this installation's own `/callback` page, so the
+  // port comes from the configured one rather than a literal: the browser has to land on
+  // the server that is actually running, or the code is relayed to a different
+  // installation (and consumed there) before it can be pasted back.
+  const redirectUri = provider === "codex"
     ? "http://localhost:1455/auth/callback"
-    : "http://localhost:20128/callback";
+    : `http://localhost:${config.port}/callback`;
   return makeRequest("GET", `/api/oauth/${provider}/authorize?redirect_uri=${encodeURIComponent(redirectUri)}`);
 }
 

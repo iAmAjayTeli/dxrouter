@@ -127,15 +127,17 @@ describe("everything derives from that one root", () => {
 
 describe("no second data root in the source tree", () => {
   /**
-   * Modules allowed to derive the root themselves. Each runs outside the app's
-   * module graph — a CommonJS MITM process and a script copied into the data
-   * directory and run by bare node — so neither can import the ESM resolver.
-   * Both duplicate its precedence and say so in a comment.
+   * Modules allowed to derive the root themselves. `src/mitm/paths.js` runs as a
+   * CommonJS process outside the app's module graph, so it cannot import the ESM
+   * resolver; it duplicates the precedence and says so in a comment.
+   *
+   * There was a second entry, `src/lib/updater/updater.js` — a script copied into the
+   * data directory and run by bare node. It was deleted along with the self-install path
+   * it served, so the list is down to one.
    */
   const ALLOWED = new Set([
     path.join("src", "lib", "dataDir.js"),
     path.join("src", "mitm", "paths.js"),
-    path.join("src", "lib", "updater", "updater.js"),
   ]);
 
   // Code-shaped only: `%APPDATA%/9router` in a documentation string is describing
@@ -171,14 +173,21 @@ describe("no second data root in the source tree", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("keeps the two documented duplicators in step with the resolver", () => {
-    for (const rel of [path.join("src", "mitm", "paths.js"), path.join("src", "lib", "updater", "updater.js")]) {
+  it("keeps the one documented duplicator in step with the resolver", () => {
+    for (const rel of [path.join("src", "mitm", "paths.js")]) {
       const text = fs.readFileSync(path.join(REPO_ROOT, rel), "utf8");
       // A duplicator that does not read DXR_DATA_DIR is exactly the hidden second
       // root this rule exists to prevent.
       expect(text, rel).toMatch(/DXR_DATA_DIR/);
       expect(text, rel).toMatch(/kept in step/);
     }
+  });
+
+  it("no longer carries the updater as a second duplicator", () => {
+    // Deleted with the self-install path. Pinned so the permitted-duplicator list cannot
+    // quietly grow back to two.
+    expect(fs.existsSync(path.join(REPO_ROOT, "src", "lib", "updater", "updater.js"))).toBe(false);
+    expect(ALLOWED.has(path.join("src", "lib", "updater", "updater.js"))).toBe(false);
   });
 });
 

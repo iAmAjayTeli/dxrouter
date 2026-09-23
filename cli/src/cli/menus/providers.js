@@ -500,7 +500,10 @@ async function handleAddOAuthConnection(providerId) {
   console.log(`  ${COLORS.bold}${COLORS.cyan}2.${COLORS.reset} Complete authorization in browser`);
   console.log();
   console.log(`  ${COLORS.bold}${COLORS.cyan}3.${COLORS.reset} Copy the callback URL from address bar`);
-  console.log(`     ${COLORS.dim}(looks like: http://localhost:20128/callback?code=...)${COLORS.reset}`);
+  // `redirectUri` is what the API client built from its configured port (and Codex's fixed
+  // 1455 variant), echoed back by the authorize call — so the example matches the URL the
+  // browser will actually land on instead of a hardcoded port.
+  console.log(`     ${COLORS.dim}(looks like: ${redirectUri}?code=...)${COLORS.reset}`);
   console.log();
   
   const callbackUrl = await prompt("  Paste callback URL: ");
