@@ -1,7 +1,11 @@
 import { getAdapter } from "../driver.js";
 import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
+import { LOCAL_ROUTER_BASE_URL } from "@/shared/constants/dxrouterIdentity";
 
-const DEFAULT_MITM_ROUTER_BASE = "http://localhost:20128";
+// Canonical, not a literal: this was `http://localhost:20128` — upstream's port. The
+// stored value wins over this default, so an install that already saved the old one is
+// corrected on read by `normalizeLocalRouterBaseUrl`, never by rewriting the row.
+const DEFAULT_MITM_ROUTER_BASE = LOCAL_ROUTER_BASE_URL;
 const DEFAULT_HEADROOM_URL = process.env.HEADROOM_URL || "http://localhost:8787";
 
 const DEFAULT_SETTINGS = {

@@ -1,5 +1,6 @@
 import { SAML } from "@node-saml/node-saml";
 import { getSettings } from "../db/repos/settingsRepo.js";
+import { DXR_DEFAULT_APP_PORT } from "@/shared/constants/dxrouterIdentity";
 
 /**
  * Formats a raw Base64 string or unformatted X.509 certificate into standard PEM format.
@@ -84,7 +85,12 @@ export function getSamlBaseUrl(request, settings) {
     }
   }
 
-  return "http://localhost:20128";
+  // Last resort, reached only when there is no configured base URL, no BASE_URL, and no
+  // request to derive an origin from. It was `http://localhost:20128` — upstream's port —
+  // which would have produced an ACS callback the IdP posts to a service this product does
+  // not run. The SP issuer is a separate identity (`urn:9router:sp`) and is deliberately
+  // unchanged: an IdP already has it registered.
+  return `http://localhost:${DXR_DEFAULT_APP_PORT}`;
 }
 
 export function createSamlInstance(settings, origin) {

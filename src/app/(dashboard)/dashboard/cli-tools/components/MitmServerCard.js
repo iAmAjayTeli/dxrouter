@@ -3,7 +3,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { Card, Button, Badge, Input } from "@/shared/components";
 
-const DEFAULT_MITM_ROUTER_BASE = "http://localhost:20128";
+import { LOCAL_ROUTER_BASE_URL } from "@/shared/constants/config";
+
+// Canonical, not a literal: this seeds the card's state and is the POST-body fallback, so
+// a hardcoded 20128 here re-persisted upstream's port on every MITM start.
+const DEFAULT_MITM_ROUTER_BASE = LOCAL_ROUTER_BASE_URL;
 
 /**
  * Shared MITM infrastructure card — manages SSL cert + server start/stop.

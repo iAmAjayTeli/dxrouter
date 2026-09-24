@@ -47,6 +47,15 @@ export const UPDATER_CONFIG = {
   appPort: DXR_DEFAULT_APP_PORT,
 };
 
+// Re-exported from the identity leaf so UI code keeps one import path. They are defined
+// there, not here, because the database layer needs them and must not pull in the provider
+// and model catalogue this module re-exports below.
+export {
+  LOCAL_ROUTER_BASE_URL,
+  LEGACY_LOCAL_ROUTER_BASE_URLS,
+  normalizeLocalRouterBaseUrl,
+} from "./dxrouterIdentity.js";
+
 // Theme configuration
 export const THEME_CONFIG = {
   storageKey: "theme",

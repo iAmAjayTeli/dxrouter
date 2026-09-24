@@ -13,10 +13,11 @@ import {
   initDbHooks,
 } from "@/mitm/manager";
 import { getSettings, updateSettings } from "@/lib/localDb";
+import { LOCAL_ROUTER_BASE_URL, normalizeLocalRouterBaseUrl } from "@/shared/constants/config";
 
 initDbHooks(getSettings, updateSettings);
 
-const DEFAULT_MITM_ROUTER_BASE = "http://localhost:20128";
+const DEFAULT_MITM_ROUTER_BASE = LOCAL_ROUTER_BASE_URL;
 
 function normalizeMitmRouterBaseUrlInput(input) {
   if (input == null || String(input).trim() === "") {
@@ -32,6 +33,9 @@ function normalizeMitmRouterBaseUrlInput(input) {
   if (u.protocol !== "http:" && u.protocol !== "https:") {
     throw new Error("MITM router URL must use http or https");
   }
+  // Stored verbatim on purpose. What the operator typed is what is saved — the stale
+  // loopback default is corrected on every read instead (GET below, and
+  // `resolveMitmRouterBaseUrl` in the manager), so nothing here overwrites a choice.
   return t;
 }
 
@@ -80,9 +84,10 @@ export async function GET() {
       isWin,
       needsSudoPassword: !isWin && !hasCachedPassword && isSudoPasswordRequired(),
       isAdmin: checkIsAdmin(),
-      mitmRouterBaseUrl:
-        (settings.mitmRouterBaseUrl && String(settings.mitmRouterBaseUrl).trim()) ||
-        DEFAULT_MITM_ROUTER_BASE,
+      // Normalised on the way out, so the card shows the port the MITM will actually use.
+      // Without this an install holding the inherited `localhost:20128` would display it,
+      // and the card re-POSTs whatever it displays — persisting the stale value forever.
+      mitmRouterBaseUrl: normalizeLocalRouterBaseUrl(settings.mitmRouterBaseUrl),
     });
   } catch (error) {
     console.log("Error getting MITM status:", error.message);

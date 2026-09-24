@@ -1,9 +1,23 @@
 const { log, err } = require("../logger");
 
-const DEFAULT_LOCAL_ROUTER = "http://localhost:20128";
-const ROUTER_BASE = String(process.env.MITM_ROUTER_BASE || DEFAULT_LOCAL_ROUTER)
-  .trim()
-  .replace(/\/+$/, "") || DEFAULT_LOCAL_ROUTER;
+// Separate CommonJS process (see ../paths.js for the same constraint), so this cannot
+// import `@/shared/constants/config`. It duplicates `LOCAL_ROUTER_BASE_URL` and the legacy
+// loopback defaults from there and must be kept in step with them.
+//
+// The env value normally arrives from the manager, which already normalises it. This
+// repeats the correction because an older manager — or a hand-set `MITM_ROUTER_BASE` —
+// can still pass upstream's port, and forwarding there would either fail outright or be
+// answered by a co-resident 9Router install holding different credentials.
+const DEFAULT_LOCAL_ROUTER = "http://localhost:20127";
+const LEGACY_LOCAL_ROUTERS = ["http://localhost:20128", "http://127.0.0.1:20128"];
+
+function normalizeLocalRouter(value) {
+  const trimmed = String(value ?? "").trim().replace(/\/+$/, "");
+  if (!trimmed) return DEFAULT_LOCAL_ROUTER;
+  return LEGACY_LOCAL_ROUTERS.includes(trimmed.toLowerCase()) ? DEFAULT_LOCAL_ROUTER : trimmed;
+}
+
+const ROUTER_BASE = normalizeLocalRouter(process.env.MITM_ROUTER_BASE);
 const API_KEY = process.env.ROUTER_API_KEY;
 
 // Headers that must not be forwarded to 9Router

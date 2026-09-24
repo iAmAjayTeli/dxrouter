@@ -44,6 +44,18 @@ const readConfig = async () => {
   }
 };
 
+/**
+ * A provider whose base URL points at this machine's DXRouter gateway, under any name.
+ *
+ * Both ports on purpose. 20127 is where DXRouter listens; 20128 is what an earlier build
+ * (and upstream) wrote, and a config carrying it is still a configured install — matching
+ * only the current port would report "not configured" and disable Reset for exactly those
+ * users. Both loopback spellings are accepted because this dashboard writes `127.0.0.1`
+ * while older configs used `localhost`, so the previous single-spelling test never matched
+ * anything DXRouter itself had written.
+ */
+const LOCAL_GATEWAY_BASE_URL = /(?:localhost|127\.0\.0\.1):(?:20127|20128)(?:\b|\/)/i;
+
 const has9RouterConfig = (config) => {
   if (!config || !config.providers) return false;
 
@@ -52,7 +64,7 @@ const has9RouterConfig = (config) => {
   if (providers["9router"]) return true;
 
   for (const [name, provider] of Object.entries(providers)) {
-    if (provider.base_url && provider.base_url.includes("localhost:20128")) {
+    if (provider.base_url && LOCAL_GATEWAY_BASE_URL.test(provider.base_url)) {
       return true;
     }
   }

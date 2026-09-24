@@ -3,6 +3,7 @@ import { spawnQuickTunnel, killCloudflared, isCloudflaredRunning, setUnexpectedE
 import { clearPid } from "./pid.js";
 import { waitForHealth, probeUrlAlive } from "./healthCheck.js";
 import { WORKER_URL } from "./config.js";
+import { resolveLocalAppPort } from "../shared/localPort.js";
 import { getSettings, updateSettings } from "@/lib/localDb";
 
 const svc = {
@@ -31,7 +32,13 @@ function throwIfCancelled(token) {
   if (token.cancelled) throw new Error("tunnel cancelled");
 }
 
-export async function enableTunnel(localPort = 20128) {
+/**
+ * @param {number} [localPort] the port to expose. No caller passes one today, so the
+ *        default is the operative value — see `resolveLocalAppPort`, which reads `PORT`
+ *        before falling back to the canonical DXRouter port. It used to be a literal
+ *        20128, upstream's port.
+ */
+export async function enableTunnel(localPort = resolveLocalAppPort()) {
   console.log(`[Tunnel] enable start (port=${localPort})`);
   svc.cancelToken = { cancelled: false };
   svc.activeLocalPort = localPort;

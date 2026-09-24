@@ -17,7 +17,28 @@ const { DATA_DIR, MITM_DIR } = require("./paths");
 const { log, err } = require("./logger");
 const { LSOF_BIN } = require("./config");
 
-const DEFAULT_MITM_ROUTER_BASE = "http://localhost:20128";
+// The MITM server is a separate CommonJS process, so like `./paths.js` this cannot import
+// `@/shared/constants/config`. It duplicates `LOCAL_ROUTER_BASE_URL` and
+// `LEGACY_LOCAL_ROUTER_BASE_URLS` from there and must be kept in step with them.
+// `tests/unit/dxr-runtime-port.test.js` fails if the two drift apart.
+const DEFAULT_MITM_ROUTER_BASE = "http://localhost:20127";
+const LEGACY_LOCAL_ROUTER_BASES = ["http://localhost:20128", "http://127.0.0.1:20128"];
+
+/**
+ * Correct the inherited loopback default on read, leaving anything else as given.
+ *
+ * The setting is persisted on every MITM start, so installs that ran an earlier build hold
+ * `http://localhost:20128` — upstream's port — and changing the default alone would never
+ * reach them. Rewriting the row instead could clobber a deliberate custom router, so the
+ * correction happens here, where the effective value is resolved.
+ */
+function normalizeLocalRouterBase(value) {
+  const trimmed = String(value ?? "").trim().replace(/\/+$/, "");
+  if (!trimmed) return DEFAULT_MITM_ROUTER_BASE;
+  return LEGACY_LOCAL_ROUTER_BASES.includes(trimmed.toLowerCase())
+    ? DEFAULT_MITM_ROUTER_BASE
+    : trimmed;
+}
 
 function shellQuoteSingle(str) {
   if (str == null || str === "") return "''";
@@ -32,7 +53,7 @@ async function resolveMitmRouterBaseUrl() {
     if (!raw) return DEFAULT_MITM_ROUTER_BASE;
     const u = new URL(raw);
     if (u.protocol !== "http:" && u.protocol !== "https:") return DEFAULT_MITM_ROUTER_BASE;
-    return raw.replace(/\/+$/, "");
+    return normalizeLocalRouterBase(raw);
   } catch {
     return DEFAULT_MITM_ROUTER_BASE;
   }

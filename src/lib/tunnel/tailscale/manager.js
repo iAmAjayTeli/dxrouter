@@ -2,6 +2,7 @@ import { loadState, generateShortId } from "../shared/state.js";
 import { startFunnel, stopFunnel, isTailscaleRunning, isTailscaleRunningStrict, isTailscaleLoggedIn, isTailscaleLoggedInStrict, startLogin, startDaemonWithPassword, provisionCert } from "./tailscale.js";
 import { waitForHealth } from "./healthCheck.js";
 import { getSettings, updateSettings } from "@/lib/localDb";
+import { resolveLocalAppPort } from "../shared/localPort.js";
 import { getCachedPassword, loadEncryptedPassword, initDbHooks } from "@/mitm/manager";
 
 initDbHooks(getSettings, updateSettings);
@@ -20,7 +21,13 @@ function throwIfCancelled(token) {
   if (token.cancelled) throw new Error("tailscale cancelled");
 }
 
-export async function enableTailscale(localPort = 20128) {
+/**
+ * @param {number} [localPort] the port to funnel. No caller passes one today, so the
+ *        default is the operative value, and it is also stored as `svc.activeLocalPort`
+ *        and reused for funnel-only recovery. See `resolveLocalAppPort`; it used to be a
+ *        literal 20128, upstream's port.
+ */
+export async function enableTailscale(localPort = resolveLocalAppPort()) {
   console.log(`[Tailscale] enable start (port=${localPort})`);
   svc.cancelToken = { cancelled: false };
   svc.activeLocalPort = localPort;

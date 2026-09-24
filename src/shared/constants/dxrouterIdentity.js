@@ -50,6 +50,53 @@ export const DXR_IDENTITY = Object.freeze({
 export const DXR_DEFAULT_APP_PORT = 20127;
 
 /**
+ * Where something on this machine reaches DXRouter's own OpenAI-compatible API.
+ *
+ * Used as the default "MITM router base": the MITM child process forwards intercepted tool
+ * traffic back into the router through this URL. It was `http://localhost:20128`, upstream
+ * 9Router's port — so on a host running both, intercepted requests either hit nothing or
+ * were silently answered by the *other* installation while carrying a DXRouter API key.
+ *
+ * Lives here rather than in `./config.js` because the database layer needs it:
+ * `settingsRepo.js` imports it on the DB-init path, and `config.js` re-exports the whole
+ * provider and model catalogue, which has no business being pulled in there.
+ */
+export const LOCAL_ROUTER_BASE_URL = `http://localhost:${DXR_DEFAULT_APP_PORT}`;
+
+/**
+ * Loopback router bases that were the inherited default rather than a choice.
+ *
+ * Deliberately only the loopback spellings of upstream's port. A remote
+ * `http://some-host:20128` is somebody's actual deployment and is left alone; a *local*
+ * 20128 cannot be a considered decision for this product, because 20127 is where it
+ * listens. That distinction is what lets `normalizeLocalRouterBaseUrl` correct the stale
+ * default without touching a custom URL.
+ */
+export const LEGACY_LOCAL_ROUTER_BASE_URLS = Object.freeze([
+  "http://localhost:20128",
+  "http://127.0.0.1:20128",
+]);
+
+/**
+ * The effective router base for a stored setting.
+ *
+ * Read-time normalisation, not a database rewrite. The value is persisted on every MITM
+ * start, so existing installs already hold the inherited default and changing the default
+ * alone would never reach them; rewriting the row instead could clobber a deliberate custom
+ * URL. Correcting on read fixes both without writing anything.
+ *
+ * Anything that is not an exact legacy loopback default is returned as given (trimmed,
+ * trailing slashes dropped), so a custom router survives untouched.
+ */
+export function normalizeLocalRouterBaseUrl(value) {
+  const trimmed = String(value ?? "").trim().replace(/\/+$/, "");
+  if (!trimmed) return LOCAL_ROUTER_BASE_URL;
+  return LEGACY_LOCAL_ROUTER_BASE_URLS.includes(trimmed.toLowerCase())
+    ? LOCAL_ROUTER_BASE_URL
+    : trimmed;
+}
+
+/**
  * How this installation was obtained. Answered by `@/lib/dxrInstallation`, which proves
  * the source-checkout case against the git remote rather than assuming it.
  *
