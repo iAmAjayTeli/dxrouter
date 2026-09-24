@@ -13,6 +13,7 @@
     "test:m2": "vitest run continuity/ protocol/m2-no-routing-change.test.js"
   },
   "devDependencies": {
+    "js-yaml": "4.3.2",
     "vitest": "^4.0.0"
   },
   "engines": {

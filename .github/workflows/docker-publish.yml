@@ -7,8 +7,10 @@ on:
   workflow_dispatch:
 
 env:
+  # Derived from the repository itself, so the published image cannot drift from the
+  # project that built it: for this repository it resolves to
+  # ghcr.io/iamajayteli/dxrouter.
   GHCR_IMAGE: ghcr.io/${{ github.repository }}
-  DOCKERHUB_IMAGE: decolua/9router
 
 jobs:
   build-and-push:
@@ -29,11 +31,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      # Docker Hub is deliberately not a target.
+      #
+      # This job used to log in to Docker Hub and push a second copy of every image to
+      # `decolua/9router` — upstream's own repository. A tag push from this fork would
+      # therefore have tried to publish DXRouter builds into another project's namespace,
+      # using credentials this repository has no legitimate claim to; with the secrets
+      # absent it fails the job instead, so the workflow was broken either way. GHCR is
+      # enough, and it needs no secret beyond the automatic GITHUB_TOKEN. Adding a Docker
+      # Hub target back means creating a DXRouter-owned repository first.
 
       - name: Extract metadata
         id: meta
@@ -41,7 +47,6 @@ jobs:
         with:
           images: |
             ${{ env.GHCR_IMAGE }}
-            ${{ env.DOCKERHUB_IMAGE }}
           tags: |
             type=semver,pattern={{version}}
             type=raw,value=latest,enable={{is_default_branch}}

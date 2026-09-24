@@ -1,23 +1,49 @@
 services:
-  9router:
-    image: decolua/9router:latest
-    container_name: 9router
+  dxrouter:
+    # Built from this checkout, not pulled.
+    #
+    # This used to be `image: decolua/9router:latest`, which is upstream's published
+    # artefact: `docker compose up` produced a running 9Router and no DXRouter at all.
+    # Swapping it for a DXRouter image is not currently possible either, because none has
+    # been published — the publish workflow fires only on a `v*` tag push and this
+    # repository has no remote tags, so there is nothing to pull. Building from source is
+    # also what `captain-definition` already does, so this is the repository's existing
+    # deployment design rather than a new one.
+    #
+    # Once a `v*` tag is pushed, the published image may be used instead by replacing the
+    # `build`/`image` pair below with the value the workflow actually produces:
+    #
+    #   image: ghcr.io/iamajayteli/dxrouter:<version>   # e.g. 0.5.60, from the git tag v0.5.60
+    #   image: ghcr.io/iamajayteli/dxrouter:latest       # moving tag, default branch only
+    #
+    # Note there is no `v` prefix on the version tag: the workflow's metadata action uses
+    # `type=semver,pattern={{version}}`, so the tag `v0.5.60` publishes `:0.5.60`.
+    build: .
+    image: dxrouter:local
+    container_name: dxrouter
     restart: always
     ports:
-      - "20128:20128"
+      - "20127:20127"
     volumes:
+      # The volume name stays `9router-data` deliberately, for the same reason
+      # `src/lib/dataDir.js` keeps the data directory called `9router`: renaming it orphans
+      # the database, credentials and usage history of every deployment that already has
+      # one. Where an install keeps its data and what product it is are separate questions.
       - 9router-data:/app/data
     env_file:
       - .env
     environment:
+      # The canonical data-root variable. `DATA_DIR` is still honoured by
+      # `src/lib/dataDir.js` but is deprecated and logs a warning, so the container sets
+      # the one that does not.
       DXR_DATA_DIR: /app/data
-      PORT: "20128"
+      PORT: "20127"
       HOSTNAME: "0.0.0.0"
       # A container has to bind all interfaces for `ports:` to work, and the
-      # server refuses a non-loopback bind without this opt-in. Publishing 20128
+      # server refuses a non-loopback bind without this opt-in. Publishing 20127
       # exposes the LLM API and every stored provider credential to whatever can
       # reach this host, so keep dashboard login and API-key checks enabled, and
-      # bind the published port to 127.0.0.1 ("127.0.0.1:20128:20128") unless
+      # bind the published port to 127.0.0.1 ("127.0.0.1:20127:20127") unless
       # remote access is actually wanted.
       DXR_ALLOW_NETWORK: "1"
       # Encrypts provider credentials at rest. Put a 64-hex-character value in

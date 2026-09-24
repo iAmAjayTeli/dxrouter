@@ -18,13 +18,19 @@ RUN npm run build
 FROM ${NODE_IMAGE} AS runner
 WORKDIR /app
 
-LABEL org.opencontainers.image.title="9router"
+LABEL org.opencontainers.image.title="DXRouter"
+LABEL org.opencontainers.image.source="https://github.com/iAmAjayTeli/dxrouter"
 
 ENV NODE_ENV=production
-ENV PORT=20128
+# DXRouter's own loopback port. This was 20128, which is upstream 9Router's: an image
+# built from this checkout announced itself on the port belonging to a different product,
+# and on a host running both they collided. See `src/shared/constants/dxrouterIdentity.js`.
+ENV PORT=20127
 ENV HOSTNAME=0.0.0.0
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV DATA_DIR=/app/data
+# The canonical data-root variable. `src/lib/dataDir.js` still honours `DATA_DIR`, which
+# this used to set, but it is deprecated and logs a warning on every start.
+ENV DXR_DATA_DIR=/app/data
 
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/static ./.next/static
@@ -50,7 +56,7 @@ RUN apk --no-cache upgrade && apk --no-cache add su-exec && \
   printf '#!/bin/sh\nchown -R node:node /app/data /app/data-home 2>/dev/null\nexec su-exec node "$@"\n' > /entrypoint.sh && \
   chmod +x /entrypoint.sh
 
-EXPOSE 20128
+EXPOSE 20127
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["node", "custom-server.js"]
