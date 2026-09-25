@@ -7,6 +7,7 @@ import BaseUrlSelect from "./BaseUrlSelect";
 import { rememberEndpoint } from "./cliEndpointPresets";
 import ApiKeySelect from "./ApiKeySelect";
 import { matchKnownEndpoint } from "./cliEndpointMatch";
+import { UPDATER_CONFIG } from "@/shared/constants/config";
 
 const ENDPOINT = "/api/cli-tools/deepseek-tui-settings";
 
@@ -104,7 +105,10 @@ export default function DeepSeekTuiToolCard({
     if (typeof window !== "undefined") {
       return normalizeLocalhost(window.location.origin);
     }
-    return "http://127.0.0.1:20128";
+    // Server-render only: in the browser the branch above returns the origin the dashboard is
+    // actually served from. The literal was upstream's 20128, so the pre-hydration HTML named
+    // a different installation's gateway.
+    return `http://127.0.0.1:${UPDATER_CONFIG.appPort}`;
   };
 
   const getEffectiveBaseUrl = () => {

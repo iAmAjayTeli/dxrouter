@@ -17,7 +17,14 @@ const COLORS = {
  * Show settings menu (tunnel + RTK + reset password)
  * @param {Array<string>} breadcrumb - Breadcrumb path
  */
-async function showSettingsMenu(breadcrumb = []) {
+/**
+ * @param {number} port the port this CLI's server is actually on. Threaded in rather than
+ *        hardcoded: this header used to print `http://localhost:20128/v1`, which is
+ *        upstream 9Router's port and not where DXRouter listens, so it told the operator to
+ *        point their tools at a different installation's gateway. Matches how
+ *        `showApiKeysMenu(port, …)` and `showCliToolsMenu(port, …)` already receive it.
+ */
+async function showSettingsMenu(port, breadcrumb = []) {
   await showMenuWithBack({
     title: "⚙️  Settings",
     breadcrumb,
@@ -30,7 +37,7 @@ async function showSettingsMenu(breadcrumb = []) {
         lines.push(`  Endpoint: ${COLORS.green}${tunnel.publicUrl}/v1${COLORS.reset}`);
         lines.push(`  Tunnel:   ${COLORS.green}ON${COLORS.reset} ${COLORS.dim}(${tunnel.shortId})${COLORS.reset}`);
       } else {
-        lines.push(`  Endpoint: http://localhost:20128/v1`);
+        lines.push(`  Endpoint: http://localhost:${port}/v1`);
         lines.push(`  Tunnel:   ${COLORS.red}OFF${COLORS.reset} ${COLORS.dim}(local only)${COLORS.reset}`);
       }
 

@@ -1,5 +1,6 @@
 "use client";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
+import { UPDATER_CONFIG } from "@/shared/constants/config";
 
 export default function GetStarted() {
   const { copied, copy } = useCopyToClipboard();
@@ -40,7 +41,13 @@ export default function GetStarted() {
                 <div className="flex-none w-8 h-8 rounded-full bg-[#f97815]/20 text-[#f97815] flex items-center justify-center font-bold">3</div>
                 <div>
                   <h4 className="font-bold text-lg">Route Requests</h4>
-                  <p className="text-sm text-gray-500 mt-1">Point your CLI tools to http://localhost:20128</p>
+                  {/* The port is a literal here, not `UPDATER_CONFIG.appPort`, and that is
+                      deliberate: this whole sentence is the translation KEY in
+                      public/i18n/literals/*.json, so an interpolated value could never
+                      match a static key and the five translated locales would silently
+                      fall back to English. Changing it means changing those files in
+                      lockstep. */}
+                  <p className="text-sm text-gray-500 mt-1">Point your CLI tools to http://localhost:20127</p>
                 </div>
               </div>
             </div>
@@ -72,8 +79,8 @@ export default function GetStarted() {
                 
                 <div className="text-gray-400 mb-6">
                   <span className="text-[#f97815]">&gt;</span> Starting 9Router...<br/>
-                  <span className="text-[#f97815]">&gt;</span> Server running on <span className="text-blue-400">http://localhost:20128</span><br/>
-                  <span className="text-[#f97815]">&gt;</span> Dashboard: <span className="text-blue-400">http://localhost:20128/dashboard</span><br/>
+                  <span className="text-[#f97815]">&gt;</span> Server running on <span className="text-blue-400">http://localhost:{UPDATER_CONFIG.appPort}</span><br/>
+                  <span className="text-[#f97815]">&gt;</span> Dashboard: <span className="text-blue-400">http://localhost:{UPDATER_CONFIG.appPort}/dashboard</span><br/>
                   <span className="text-green-400">&gt;</span> Ready to route! ✓
                 </div>
                 

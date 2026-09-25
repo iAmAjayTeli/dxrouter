@@ -109,7 +109,7 @@ async function startTerminalUI(port) {
       {
         label: "Settings",
         action: async () => {
-          await showSettingsMenu([...basePath, "Settings"]);
+          await showSettingsMenu(port, [...basePath, "Settings"]);
           return true;
         }
       }

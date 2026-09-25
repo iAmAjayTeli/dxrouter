@@ -36,6 +36,7 @@ import {
 } from "@/lib/oauth/utils/server";
 import { detectIdeInstalled } from "@/lib/oauth/utils/ideDetect";
 import { ZED_HOSTED_CONFIG } from "@/lib/oauth/constants/oauth";
+import { DXR_DEFAULT_APP_PORT } from "@/shared/constants/dxrouterIdentity";
 
 async function completeXaiManualCode(code, state) {
   const session = state ? getXaiSessionStatus(state) : null;
@@ -77,6 +78,52 @@ async function completeXaiManualCode(code, state) {
 }
 
 /**
+ * The callback origin to hand a provider when the caller did not supply one.
+ *
+ * Not a constant, because the right answer is "wherever this dashboard is being served
+ * from". `src/app/callback/page.js` relays the authorization code back to the opener
+ * through `postMessage`, `BroadcastChannel` and `localStorage`, and all three are
+ * origin-scoped — its allowlist is `[window.location.origin, "http://localhost:1455"]`.
+ * A callback that lands on any other origin therefore cannot deliver the code even if
+ * something answers there.
+ *
+ * The literal this replaces was `http://localhost:8080/callback`, which matches no
+ * DXRouter port (20127), no upstream port (20128) and no provider's registered loopback
+ * port. It is inherited boilerplate: the git history is squashed, nothing documents it, and
+ * 8080 is the conventional default of the Go implementation this project descends from. So
+ * the fallback silently dead-ended unless the operator happened to run on 8080.
+ *
+ * Precedence mirrors `getSamlBaseUrl` in `@/lib/auth/saml`, which answers the same
+ * question for the SAML ACS URL: proxy headers first, then the request URL, then the
+ * canonical port as a last resort.
+ *
+ * Providers that need their own loopback port are unaffected — codex 1455, xai 56121, zed
+ * 58443 and the dynamic trae/windsurf ports are all supplied explicitly by the caller, so
+ * this branch is never taken for them.
+ */
+function defaultCallbackOrigin(request) {
+  const forwardedProto = request?.headers?.get?.("x-forwarded-proto") || "";
+  const forwardedHost = request?.headers?.get?.("x-forwarded-host") || "";
+  const host = forwardedHost || request?.headers?.get?.("host") || "";
+  if (host) {
+    let protocol = forwardedProto;
+    if (!protocol) {
+      try {
+        protocol = new URL(request.url).protocol.replace(/:$/, "");
+      } catch {
+        protocol = "http";
+      }
+    }
+    return `${protocol}://${host}`;
+  }
+  try {
+    return new URL(request.url).origin;
+  } catch {
+    return `http://localhost:${DXR_DEFAULT_APP_PORT}`;
+  }
+}
+
+/**
  * Dynamic OAuth API Route
  * Handles: authorize, exchange, device-code, poll
  */
@@ -89,7 +136,10 @@ export async function GET(request, { params }) {
     const { searchParams } = new URL(request.url);
 
     if (action === "authorize") {
-      const redirectUri = searchParams.get("redirect_uri") || "http://localhost:8080/callback";
+      // A caller-supplied redirect_uri always wins: the dashboard and the CLI both compute
+      // it, and providers with a fixed loopback port depend on being able to name it.
+      const redirectUri =
+        searchParams.get("redirect_uri") || `${defaultCallbackOrigin(request)}/callback`;
       // Collect provider-specific meta params (e.g. gitlab passes baseUrl, clientId, clientSecret)
       const reservedParams = new Set(["redirect_uri"]);
       const meta = {};

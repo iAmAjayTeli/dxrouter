@@ -22,6 +22,19 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+// Imported statically, once. These were dynamic `await import(...)` calls inside each case,
+// and the first one pays for loading the config barrel (which re-exports the provider and
+// model catalogues) — enough to exceed the 5s default timeout on a loaded machine and fail a
+// case that is pure arithmetic. The SAML module below stays dynamic because those cases need
+// a module reset for env hermeticity.
+import { resolveLocalAppPort } from "@/lib/tunnel/shared/localPort.js";
+import {
+  UPDATER_CONFIG,
+  LOCAL_ROUTER_BASE_URL,
+  LEGACY_LOCAL_ROUTER_BASE_URLS,
+  normalizeLocalRouterBaseUrl,
+} from "@/shared/constants/config.js";
+
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(REPO_ROOT, rel), "utf8");
 
@@ -85,13 +98,10 @@ describe("A. start.sh runs the container on the port the image exposes", () => {
 
 describe("B. tunnel defaults resolve PORT first, then the canonical constant", () => {
   it("prefers an explicitly configured PORT", async () => {
-    const { resolveLocalAppPort } = await import("@/lib/tunnel/shared/localPort.js");
     expect(resolveLocalAppPort({ PORT: "31000" })).toBe(31000);
   });
 
   it("falls back to the canonical app port when PORT is absent or unusable", async () => {
-    const { resolveLocalAppPort } = await import("@/lib/tunnel/shared/localPort.js");
-    const { UPDATER_CONFIG } = await import("@/shared/constants/config.js");
 
     // Asserted against the constant, not against 20127, so the test follows the product.
     for (const env of [{}, { PORT: "" }, { PORT: "not-a-port" }, { PORT: "0" }, { PORT: "70000" }]) {
@@ -100,7 +110,6 @@ describe("B. tunnel defaults resolve PORT first, then the canonical constant", (
   });
 
   it("never returns upstream's port, and never a string", async () => {
-    const { resolveLocalAppPort } = await import("@/lib/tunnel/shared/localPort.js");
     const resolved = resolveLocalAppPort({});
 
     expect(resolved).not.toBe(20128);
@@ -128,12 +137,10 @@ describe("B. tunnel defaults resolve PORT first, then the canonical constant", (
 
 describe("C. the MITM router base defaults to this app's own port", () => {
   it("builds the local router URL from the canonical constant", async () => {
-    const { LOCAL_ROUTER_BASE_URL, UPDATER_CONFIG } = await import("@/shared/constants/config.js");
     expect(LOCAL_ROUTER_BASE_URL).toBe(`http://localhost:${UPDATER_CONFIG.appPort}`);
   });
 
   it("is the settings default an install starts from", async () => {
-    const { LOCAL_ROUTER_BASE_URL } = await import("@/shared/constants/config.js");
     // Comments stripped: the file explains what the literal used to be, and an explanation
     // is not a default.
     const repo = read("src/lib/db/repos/settingsRepo.js")
@@ -149,8 +156,6 @@ describe("C. the MITM router base defaults to this app's own port", () => {
 
 describe("D. a legacy stored router base is corrected on read", () => {
   it("normalises both loopback spellings of upstream's port", async () => {
-    const { normalizeLocalRouterBaseUrl, LOCAL_ROUTER_BASE_URL } =
-      await import("@/shared/constants/config.js");
 
     for (const stored of [
       "http://localhost:20128",
@@ -164,8 +169,6 @@ describe("D. a legacy stored router base is corrected on read", () => {
   });
 
   it("treats an empty or missing value as the local default", async () => {
-    const { normalizeLocalRouterBaseUrl, LOCAL_ROUTER_BASE_URL } =
-      await import("@/shared/constants/config.js");
 
     for (const stored of ["", "   ", null, undefined]) {
       expect(normalizeLocalRouterBaseUrl(stored)).toBe(LOCAL_ROUTER_BASE_URL);
@@ -185,7 +188,6 @@ describe("D. a legacy stored router base is corrected on read", () => {
 
 describe("E. a deliberate custom router base survives untouched", () => {
   it("returns non-default URLs exactly as given", async () => {
-    const { normalizeLocalRouterBaseUrl } = await import("@/shared/constants/config.js");
 
     for (const custom of [
       "http://192.168.1.50:20128",   // remote host on upstream's port — somebody's real deployment
@@ -199,7 +201,6 @@ describe("E. a deliberate custom router base survives untouched", () => {
   });
 
   it("only strips trailing slashes from a custom value", async () => {
-    const { normalizeLocalRouterBaseUrl } = await import("@/shared/constants/config.js");
     expect(normalizeLocalRouterBaseUrl("https://router.example.com/")).toBe("https://router.example.com");
   });
 });
@@ -210,8 +211,6 @@ describe("D/E. the unbundled MITM copies behave the same way", () => {
   const files = ["src/mitm/manager.js", "src/mitm/handlers/base.js"];
 
   it("declare the canonical default and the legacy list, in step with the shared module", async () => {
-    const { LOCAL_ROUTER_BASE_URL, LEGACY_LOCAL_ROUTER_BASE_URLS } =
-      await import("@/shared/constants/config.js");
 
     for (const rel of files) {
       const src = read(rel);
@@ -242,8 +241,6 @@ describe("D/E. the unbundled MITM copies behave the same way", () => {
         else process.env.MITM_ROUTER_BASE = prev;
       }
     };
-
-    const { LOCAL_ROUTER_BASE_URL } = await import("@/shared/constants/config.js");
 
     expect(await load(LEGACY)).toBe(LOCAL_ROUTER_BASE_URL);
     expect(await load("http://127.0.0.1:20128")).toBe(LOCAL_ROUTER_BASE_URL);
@@ -352,7 +349,6 @@ describe("H. the SAML fallback origin uses this app's port", () => {
   });
 
   it("falls back to the canonical port when nothing else is available", async () => {
-    const { UPDATER_CONFIG } = await import("@/shared/constants/config.js");
 
     // No settings, no env, no request — the only path that reaches the literal.
     const origin = saml.getSamlBaseUrl(undefined, undefined);
@@ -378,7 +374,6 @@ describe("H. the SAML fallback origin uses this app's port", () => {
   });
 
   it("produces an ACS callback on the resolved origin", async () => {
-    const { UPDATER_CONFIG } = await import("@/shared/constants/config.js");
     const origin = saml.getSamlBaseUrl(undefined, undefined);
 
     // The origin's only consumer: `callbackUrl = `${origin}/api/auth/saml/acs``.

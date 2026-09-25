@@ -6,6 +6,7 @@ import { getProviderIconSrc, markProviderIconMissing } from "@/shared/utils/prov
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 import Image from "next/image";
 import ApiKeySelect from "./ApiKeySelect";
+import { UPDATER_CONFIG } from "@/shared/constants/config";
 
 export default function DefaultToolCard({ toolId, tool, isExpanded, onToggle, baseUrl, apiKeys, activeProviders = [], cloudEnabled = false, tunnelEnabled = false }) {
   const [copiedField, setCopiedField] = useState(null);
@@ -23,7 +24,7 @@ export default function DefaultToolCard({ toolId, tool, isExpanded, onToggle, ba
       : (!cloudEnabled ? "sk_9router" : "your-api-key");
     
     // Add /v1 suffix only if not already present (DRY - avoid duplicate)
-    const normalizedBaseUrl = baseUrl || "http://localhost:20128";
+    const normalizedBaseUrl = baseUrl || `http://localhost:${UPDATER_CONFIG.appPort}`;
     const baseUrlWithV1 = normalizedBaseUrl.endsWith("/v1") 
       ? normalizedBaseUrl 
       : `${normalizedBaseUrl}/v1`;

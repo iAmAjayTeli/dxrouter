@@ -5,6 +5,7 @@ import Link from "next/link";
 import { CardSkeleton } from "@/shared/components";
 import { CLI_TOOLS } from "@/shared/constants/cliTools";
 import { getModelsByProviderId, PROVIDER_ID_TO_ALIAS } from "@/shared/constants/models";
+import { UPDATER_CONFIG } from "@/shared/constants/config";
 import {
   ClaudeToolCard, CodexToolCard, DroidToolCard, OpenClawToolCard,
   HermesToolCard, DefaultToolCard, OpenCodeToolCard, CoworkToolCard,
@@ -123,7 +124,9 @@ export default function ToolDetailClient({ toolId, machineId }) {
     if (tunnelEnabled && tunnelPublicUrl) return tunnelPublicUrl;
     if (cloudEnabled && CLOUD_URL) return CLOUD_URL;
     if (typeof window !== "undefined") return window.location.origin;
-    return "http://localhost:20128";
+    // Server-render only: the browser branch above uses the real origin. The literal was
+    // upstream's 20128.
+    return `http://localhost:${UPDATER_CONFIG.appPort}`;
   };
 
   const renderToolCard = () => {
