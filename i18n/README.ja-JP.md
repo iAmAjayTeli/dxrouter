@@ -43,7 +43,7 @@
 │  あなたの    │  （Claude Code、Codex、Gemini CLI、OpenClaw、Cursor、Cline...）
 │   CLIツール  │
 └──────┬──────┘
-       │ http://localhost:20128/v1
+       │ http://localhost:20127/v1
        ↓
 ┌─────────────────────────────────────────┐
 │        9Router（スマートルーター）        │
@@ -72,7 +72,7 @@ npm install -g 9router
 9router
 ```
 
-🎉 ダッシュボードが `http://localhost:20128` で開きます
+🎉 ダッシュボードが `http://localhost:20127` で開きます
 
 **2. 無料プロバイダーを接続（サインアップ不要）：**
 
@@ -82,7 +82,7 @@ npm install -g 9router
 
 ```
 Claude Code/Codex/Gemini CLI/OpenClaw/Cursor/Clineの設定:
-  エンドポイント: http://localhost:20128/v1
+  エンドポイント: http://localhost:20127/v1
   APIキー: [ダッシュボードからコピー]
   モデル: if/kimi-k2-thinking
 ```
@@ -96,19 +96,19 @@ Claude Code/Codex/Gemini CLI/OpenClaw/Cursor/Clineの設定:
 ```bash
 cp .env.example .env
 npm install
-PORT=20128 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run dev
+PORT=20127 NEXT_PUBLIC_BASE_URL=http://localhost:20127 npm run dev
 ```
 
 本番モード：
 
 ```bash
 npm run build
-PORT=20128 HOSTNAME=0.0.0.0 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run start
+PORT=20127 HOSTNAME=127.0.0.1 NEXT_PUBLIC_BASE_URL=http://localhost:20127 npm run start
 ```
 
 デフォルトURL：
-- ダッシュボード: `http://localhost:20128/dashboard`
-- OpenAI互換API: `http://localhost:20128/v1`
+- ダッシュボード: `http://localhost:20127/dashboard`
+- OpenAI互換API: `http://localhost:20127/v1`
 
 ---
 
@@ -861,7 +861,7 @@ CLIでの使用: premium-coding
 
 ```
 設定 → Models → Advanced:
-  OpenAI API Base URL: http://localhost:20128/v1
+  OpenAI API Base URL: http://localhost:20127/v1
   OpenAI API Key: [9routerダッシュボードから]
   Model: cc/claude-opus-4-6
 ```
@@ -874,7 +874,7 @@ CLIでの使用: premium-coding
 
 ```json
 {
-  "anthropic_api_base": "http://localhost:20128/v1",
+  "anthropic_api_base": "http://localhost:20127/v1",
   "anthropic_api_key": "your-9router-api-key"
 }
 ```
@@ -882,7 +882,7 @@ CLIでの使用: premium-coding
 ### Codex CLI
 
 ```bash
-export OPENAI_BASE_URL="http://localhost:20128"
+export OPENAI_BASE_URL="http://localhost:20127"
 export OPENAI_API_KEY="your-9router-api-key"
 
 codex "your prompt"
@@ -910,7 +910,7 @@ codex "your prompt"
   "models": {
     "providers": {
       "9router": {
-        "baseUrl": "http://127.0.0.1:20128/v1",
+        "baseUrl": "http://127.0.0.1:20127/v1",
         "apiKey": "sk_9router",
         "api": "openai-completions",
         "models": [
@@ -931,7 +931,7 @@ codex "your prompt"
 
 ```
 プロバイダー: OpenAI Compatible
-Base URL: http://localhost:20128/v1
+Base URL: http://localhost:20127/v1
 API Key: [ダッシュボードから]
 Model: cc/claude-opus-4-6
 ```
@@ -954,10 +954,12 @@ npm run build
 export JWT_SECRET="your-secure-secret-change-this"
 export INITIAL_PASSWORD="your-password"
 export DATA_DIR="/var/lib/9router"
-export PORT="20128"
+export PORT="20127"
 export HOSTNAME="0.0.0.0"
+export DXR_ALLOW_NETWORK="1"   # required for any non-loopback bind
 export NODE_ENV="production"
-export NEXT_PUBLIC_BASE_URL="http://localhost:20128"
+export DXR_MASTER_KEY="$(openssl rand -hex 32)"   # encrypts stored provider credentials; keep it
+export NEXT_PUBLIC_BASE_URL="http://localhost:20127"
 export NEXT_PUBLIC_CLOUD_URL="https://9router.com"
 export API_KEY_SECRET="endpoint-proxy-api-key-secret"
 export MACHINE_ID_SALT="endpoint-proxy-salt"
@@ -981,7 +983,7 @@ docker build -t 9router .
 # コンテナを実行（現在のセットアップで使用しているコマンド）
 docker run -d \
   --name 9router \
-  -p 20128:20128 \
+  -p 127.0.0.1:20128:20128 \
   --env-file /root/dev/9router/.env \
   -v 9router-data:/app/data \
   -v 9router-usage:/root/.9router \
@@ -993,7 +995,7 @@ docker run -d \
 ```bash
 docker run -d \
   --name 9router \
-  -p 20128:20128 \
+  -p 127.0.0.1:20128:20128 \
   --env-file ./.env \
   -v 9router-data:/app/data \
   -v 9router-usage:/root/.9router \
@@ -1002,7 +1004,7 @@ docker run -d \
 
 コンテナのデフォルト：
 - `PORT=20128`
-- `HOSTNAME=0.0.0.0`
+- `HOSTNAME=0.0.0.0` + `DXR_ALLOW_NETWORK=1`
 
 便利なコマンド：
 
@@ -1019,10 +1021,10 @@ docker stop 9router && docker rm 9router
 | `JWT_SECRET` | 自動生成（`~/.9router/jwt-secret`） | ダッシュボード認証クッキーのJWT署名シークレット（複数インスタンス間で共有する場合に設定） |
 | `INITIAL_PASSWORD` | `123456` | 保存されたハッシュがない場合の初回ログインパスワード |
 | `DATA_DIR` | `~/.9router` | メインアプリのデータベース格納場所（`db.json`） |
-| `PORT` | フレームワークデフォルト | サービスポート（例では`20128`） |
+| `PORT` | フレームワークデフォルト | サービスポート（例では`20127`） |
 | `HOSTNAME` | フレームワークデフォルト | バインドホスト（Dockerデフォルトは`0.0.0.0`） |
 | `NODE_ENV` | ランタイムデフォルト | デプロイ時は`production`に設定 |
-| `BASE_URL` | `http://localhost:20128` | クラウド同期ジョブで使用されるサーバーサイド内部ベースURL |
+| `BASE_URL` | `http://localhost:20127` | クラウド同期ジョブで使用されるサーバーサイド内部ベースURL |
 | `CLOUD_URL` | `https://9router.com` | サーバーサイドのクラウド同期エンドポイントベースURL |
 | `NEXT_PUBLIC_BASE_URL` | `http://localhost:3000` | 後方互換/公開ベースURL（サーバーランタイムには`BASE_URL`を推奨） |
 | `NEXT_PUBLIC_CLOUD_URL` | `https://9router.com` | 後方互換/公開クラウドURL（サーバーランタイムには`CLOUD_URL`を推奨） |
@@ -1115,7 +1117,7 @@ docker stop 9router && docker rm 9router
 - 重要でないタスクには無料ティア（Gemini CLI、iFlow）を使用
 
 **ダッシュボードが違うポートで開く**
-- `PORT=20128` と `NEXT_PUBLIC_BASE_URL=http://localhost:20128` を設定
+- `PORT=20127` と `NEXT_PUBLIC_BASE_URL=http://localhost:20127` を設定
 
 **初回ログインできない**
 - `.env` の `INITIAL_PASSWORD` を確認
@@ -1142,7 +1144,7 @@ docker stop 9router && docker rm 9router
 ### チャット補完
 
 ```bash
-POST http://localhost:20128/v1/chat/completions
+POST http://localhost:20127/v1/chat/completions
 Authorization: Bearer your-api-key
 Content-Type: application/json
 
@@ -1158,7 +1160,7 @@ Content-Type: application/json
 ### モデル一覧
 
 ```bash
-GET http://localhost:20128/v1/models
+GET http://localhost:20127/v1/models
 Authorization: Bearer your-api-key
 
 → すべてのモデル + コンボをOpenAI形式で返却

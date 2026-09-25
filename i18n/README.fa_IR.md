@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./images/9router.png?1" alt="داشبورد 9Router" width="800"/>
+  <img src="../images/9router.png?1" alt="داشبورد 9Router" width="800"/>
   
   # 9Router - مسیریاب رایگان هوش مصنوعی و ذخیره‌ساز توکن
   
@@ -15,9 +15,9 @@
 
 <a href="https://trendshift.io/repositories/22628" target="_blank"><img src="https://trendshift.io/api/badge/repositories/22628" alt="decolua%2F9router | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
-[🚀 شروع سریع](#-شروع-سریع) • [💡 ویژگی‌ها](#-ویژگی‌های-کلیدی) • [📖 راه‌اندازی](#-راهنمای-راه‌اندازی) • [🌐 وب‌سایت](https://9router.com)
+[🚀 شروع سریع](#-شروع-سریع) • [💡 ویژگی‌ها](#-ویژگیهای-کلیدی) • [📖 راه‌اندازی](#-راهنمای-راهاندازی) • [🌐 وب‌سایت](https://9router.com)
 
-[🇻🇳 Tiếng Việt](./i18n/README.vi.md) • [🇨🇳 中文](./i18n/README.zh-CN.md) • [🇯🇵 日本語](./i18n/README.ja-JP.md) • [🇷🇺 Русский](./i18n/README.ru.md) • [🇮🇷 فارسی](./i18n/README.fa_IR.md)
+[🇻🇳 Tiếng Việt](./README.vi.md) • [🇨🇳 中文](./README.zh-CN.md) • [🇯🇵 日本語](./README.ja-JP.md) • [🇷🇺 Русский](./README.ru.md) • [🇮🇷 فارسی](./README.fa_IR.md)
 
 </div>
 
@@ -50,7 +50,7 @@
 │  ابزار خط   │  (Claude Code, Codex, OpenClaw, Cursor, Cline...)
 │  فرمان شما  │
 └──────┬──────┘
-       │ http://localhost:20128/v1
+       │ http://localhost:20127/v1
        ↓
 ┌─────────────────────────────────────────────┐
 │           9Router (مسیریاب هوشمند)          │
@@ -80,7 +80,7 @@ npm install -g 9router
 9router
 ```
 
-🎉 داشبورد در آدرس `http://localhost:20128` باز می‌شود
+🎉 داشبورد در آدرس `http://localhost:20127` باز می‌شود
 
 **۲. اتصال یک ارائه‌دهنده رایگان (بدون نیاز به ثبت‌نام):**
 
@@ -90,7 +90,7 @@ npm install -g 9router
 
 ```
 تنظیمات Claude Code/Codex/OpenClaw/Cursor/Cline:
-  آدرس端点: http://localhost:20128/v1
+  آدرس端点: http://localhost:20127/v1
   کلید API: [کپی از داشبورد]
   مدل: kr/claude-sonnet-4.5
 ```
@@ -104,20 +104,20 @@ npm install -g 9router
 ```bash
 cp .env.example .env
 npm install
-PORT=20128 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run dev
+PORT=20127 NEXT_PUBLIC_BASE_URL=http://localhost:20127 npm run dev
 ```
 
 حالت تولید:
 
 ```bash
 npm run build
-PORT=20128 HOSTNAME=0.0.0.0 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run start
+PORT=20127 HOSTNAME=127.0.0.1 NEXT_PUBLIC_BASE_URL=http://localhost:20127 npm run start
 ```
 
 آدرس‌های پیش‌فرض:
 
-- داشبورد: `http://localhost:20128/dashboard`
-- API سازگار با OpenAI: `http://localhost:20128/v1`
+- داشبورد: `http://localhost:20127/dashboard`
+- API سازگار با OpenAI: `http://localhost:20127/v1`
 
 ---
 
@@ -225,53 +225,53 @@ PORT=20128 HOSTNAME=0.0.0.0 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run 
   <table>
     <tr>
       <td align="center" width="120">
-        <img src="./public/providers/claude.png" width="60" alt="Claude Code"/><br/>
+        <img src="../public/providers/claude.png" width="60" alt="Claude Code"/><br/>
         <b>Claude-Code</b>
       </td>
       <td align="center" width="120">
-        <img src="./public/providers/openclaw.png" width="60" alt="OpenClaw"/><br/>
+        <img src="../public/providers/openclaw.png" width="60" alt="OpenClaw"/><br/>
         <b>OpenClaw</b>
       </td>
       <td align="center" width="120">
-        <img src="./public/providers/codex.png" width="60" alt="Codex"/><br/>
+        <img src="../public/providers/codex.png" width="60" alt="Codex"/><br/>
         <b>Codex</b>
       </td>
       <td align="center" width="120">
-        <img src="./public/providers/opencode.png" width="60" alt="OpenCode"/><br/>
+        <img src="../public/providers/opencode.png" width="60" alt="OpenCode"/><br/>
         <b>OpenCode</b>
       </td>
       <td align="center" width="120">
-        <img src="./public/providers/cursor.png" width="60" alt="Cursor"/><br/>
+        <img src="../public/providers/cursor.png" width="60" alt="Cursor"/><br/>
         <b>Cursor</b>
       </td>
       <td align="center" width="120">
-        <img src="./public/providers/antigravity.png" width="60" alt="Antigravity"/><br/>
+        <img src="../public/providers/antigravity.png" width="60" alt="Antigravity"/><br/>
         <b>Antigravity</b>
       </td>
     </tr>
     <tr>
       <td align="center" width="120">
-        <img src="./public/providers/cline.png" width="60" alt="Cline"/><br/>
+        <img src="../public/providers/cline.png" width="60" alt="Cline"/><br/>
         <b>Cline</b>
       </td>
       <td align="center" width="120">
-        <img src="./public/providers/continue.png" width="60" alt="Continue"/><br/>
+        <img src="../public/providers/continue.png" width="60" alt="Continue"/><br/>
         <b>Continue</b>
       </td>
       <td align="center" width="120">
-        <img src="./public/providers/droid.png" width="60" alt="Droid"/><br/>
+        <img src="../public/providers/droid.png" width="60" alt="Droid"/><br/>
         <b>Droid</b>
       </td>
       <td align="center" width="120">
-        <img src="./public/providers/roo.png" width="60" alt="Roo"/><br/>
+        <img src="../public/providers/roo.png" width="60" alt="Roo"/><br/>
         <b>Roo</b>
       </td>
       <td align="center" width="120">
-        <img src="./public/providers/copilot.png" width="60" alt="Copilot"/><br/>
+        <img src="../public/providers/copilot.png" width="60" alt="Copilot"/><br/>
         <b>Copilot</b>
       </td>
       <td align="center" width="120">
-        <img src="./public/providers/kilocode.png" width="60" alt="Kilo Code"/><br/>
+        <img src="../public/providers/kilocode.png" width="60" alt="Kilo Code"/><br/>
         <b>Kilo Code</b>
       </td>
     </tr>
@@ -288,27 +288,27 @@ PORT=20128 HOSTNAME=0.0.0.0 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run 
   <table>
     <tr>
       <td align="center" width="120">
-        <img src="./public/providers/claude.png" width="60" alt="Claude Code"/><br/>
+        <img src="../public/providers/claude.png" width="60" alt="Claude Code"/><br/>
         <b>Claude-Code</b>
       </td>
       <td align="center" width="120">
-        <img src="./public/providers/antigravity.png" width="60" alt="Antigravity"/><br/>
+        <img src="../public/providers/antigravity.png" width="60" alt="Antigravity"/><br/>
         <b>Antigravity</b>
       </td>
       <td align="center" width="120">
-        <img src="./public/providers/codex.png" width="60" alt="Codex"/><br/>
+        <img src="../public/providers/codex.png" width="60" alt="Codex"/><br/>
         <b>Codex</b>
       </td>
       <td align="center" width="120">
-        <img src="./public/providers/github.png" width="60" alt="GitHub"/><br/>
+        <img src="../public/providers/github.png" width="60" alt="GitHub"/><br/>
         <b>GitHub</b>
       </td>
       <td align="center" width="120">
-        <img src="./public/providers/cursor.png" width="60" alt="Cursor"/><br/>
+        <img src="../public/providers/cursor.png" width="60" alt="Cursor"/><br/>
         <b>Cursor</b>
       </td>
       <td align="center" width="120">
-        <img src="./public/providers/kimchi.png" width="60" alt="Kimchi"/><br/>
+        <img src="../public/providers/kimchi.png" width="60" alt="Kimchi"/><br/>
         <b>Kimchi</b>
       </td>
     </tr>
@@ -321,17 +321,17 @@ PORT=20128 HOSTNAME=0.0.0.0 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run 
   <table>
     <tr>
       <td align="center" width="150">
-        <img src="./public/providers/kiro.png" width="70" alt="Kiro"/><br/>
+        <img src="../public/providers/kiro.png" width="70" alt="Kiro"/><br/>
         <b>Kiro AI</b><br/>
         <sub>Claude 4.5 + GLM-5 + MiniMax<br/>نامحدود رایگان</sub>
       </td>
       <td align="center" width="150">
-        <img src="./public/providers/opencode.png" width="70" alt="OpenCode Free"/><br/>
+        <img src="../public/providers/opencode.png" width="70" alt="OpenCode Free"/><br/>
         <b>OpenCode Free</b><br/>
         <sub>بدون احراز هویت • دریافت خودکار مدل‌ها<br/>نامحدود رایگان</sub>
       </td>
       <td align="center" width="150">
-        <img src="./public/providers/gemini.png" width="70" alt="Vertex AI"/><br/>
+        <img src="../public/providers/gemini.png" width="70" alt="Vertex AI"/><br/>
         <b>Vertex AI</b><br/>
         <sub>Gemini 3 Pro + GLM-5 + DeepSeek<br/>۳۰۰ دلار اعتبار رایگان</sub>
       </td>
@@ -347,79 +347,79 @@ PORT=20128 HOSTNAME=0.0.0.0 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run 
   <table>
     <tr>
       <td align="center" width="100">
-        <img src="./public/providers/openrouter.png" width="50" alt="OpenRouter"/><br/>
+        <img src="../public/providers/openrouter.png" width="50" alt="OpenRouter"/><br/>
         <sub>OpenRouter</sub>
       </td>
       <td align="center" width="100">
-        <img src="./public/providers/glm.png" width="50" alt="GLM"/><br/>
+        <img src="../public/providers/glm.png" width="50" alt="GLM"/><br/>
         <sub>GLM</sub>
       </td>
       <td align="center" width="100">
-        <img src="./public/providers/kimi.png" width="50" alt="Kimi"/><br/>
+        <img src="../public/providers/kimi.png" width="50" alt="Kimi"/><br/>
         <sub>Kimi</sub>
       </td>
       <td align="center" width="100">
-        <img src="./public/providers/minimax.png" width="50" alt="MiniMax"/><br/>
+        <img src="../public/providers/minimax.png" width="50" alt="MiniMax"/><br/>
         <sub>MiniMax</sub>
       </td>
       <td align="center" width="100">
-        <img src="./public/providers/openai.png" width="50" alt="OpenAI"/><br/>
+        <img src="../public/providers/openai.png" width="50" alt="OpenAI"/><br/>
         <sub>OpenAI</sub>
       </td>
       <td align="center" width="100">
-        <img src="./public/providers/anthropic.png" width="50" alt="Anthropic"/><br/>
+        <img src="../public/providers/anthropic.png" width="50" alt="Anthropic"/><br/>
         <sub>Anthropic</sub>
       </td>
     </tr>
     <tr>
       <td align="center" width="100">
-        <img src="./public/providers/gemini.png" width="50" alt="Gemini"/><br/>
+        <img src="../public/providers/gemini.png" width="50" alt="Gemini"/><br/>
         <sub>Gemini</sub>
       </td>
       <td align="center" width="100">
-        <img src="./public/providers/deepseek.png" width="50" alt="DeepSeek"/><br/>
+        <img src="../public/providers/deepseek.png" width="50" alt="DeepSeek"/><br/>
         <sub>DeepSeek</sub>
       </td>
       <td align="center" width="100">
-        <img src="./public/providers/groq.png" width="50" alt="Groq"/><br/>
+        <img src="../public/providers/groq.png" width="50" alt="Groq"/><br/>
         <sub>Groq</sub>
       </td>
       <td align="center" width="100">
-        <img src="./public/providers/xai.png" width="50" alt="xAI"/><br/>
+        <img src="../public/providers/xai.png" width="50" alt="xAI"/><br/>
         <sub>xAI</sub>
       </td>
       <td align="center" width="100">
-        <img src="./public/providers/mistral.png" width="50" alt="Mistral"/><br/>
+        <img src="../public/providers/mistral.png" width="50" alt="Mistral"/><br/>
         <sub>Mistral</sub>
       </td>
       <td align="center" width="100">
-        <img src="./public/providers/perplexity.png" width="50" alt="Perplexity"/><br/>
+        <img src="../public/providers/perplexity.png" width="50" alt="Perplexity"/><br/>
         <sub>Perplexity</sub>
       </td>
     </tr>
     <tr>
       <td align="center" width="100">
-        <img src="./public/providers/together.png" width="50" alt="Together"/><br/>
+        <img src="../public/providers/together.png" width="50" alt="Together"/><br/>
         <sub>Together AI</sub>
       </td>
       <td align="center" width="100">
-        <img src="./public/providers/fireworks.png" width="50" alt="Fireworks"/><br/>
+        <img src="../public/providers/fireworks.png" width="50" alt="Fireworks"/><br/>
         <sub>Fireworks</sub>
       </td>
       <td align="center" width="100">
-        <img src="./public/providers/cerebras.png" width="50" alt="Cerebras"/><br/>
+        <img src="../public/providers/cerebras.png" width="50" alt="Cerebras"/><br/>
         <sub>Cerebras</sub>
       </td>
       <td align="center" width="100">
-        <img src="./public/providers/cohere.png" width="50" alt="Cohere"/><br/>
+        <img src="../public/providers/cohere.png" width="50" alt="Cohere"/><br/>
         <sub>Cohere</sub>
       </td>
       <td align="center" width="100">
-        <img src="./public/providers/nvidia.png" width="50" alt="NVIDIA"/><br/>
+        <img src="../public/providers/nvidia.png" width="50" alt="NVIDIA"/><br/>
         <sub>NVIDIA</sub>
       </td>
       <td align="center" width="100">
-        <img src="./public/providers/siliconflow.png" width="50" alt="SiliconFlow"/><br/>
+        <img src="../public/providers/siliconflow.png" width="50" alt="SiliconFlow"/><br/>
         <sub>SiliconFlow</sub>
       </td>
     </tr>
@@ -1041,7 +1041,7 @@ Vertex Partner (Anthropic / DeepSeek / GLM / Qwen از طریق Vertex):
 
 ```
 تنظیمات → مدل‌ها → پیشرفته:
-  آدرس پایه API OpenAI: http://localhost:20128/v1
+  آدرس پایه API OpenAI: http://localhost:20127/v1
   کلید API OpenAI: [از داشبورد 9router]
   مدل: cc/claude-opus-4-7
 ```
@@ -1054,7 +1054,7 @@ Vertex Partner (Anthropic / DeepSeek / GLM / Qwen از طریق Vertex):
 
 ```json
 {
-  "anthropic_api_base": "http://localhost:20128/v1",
+  "anthropic_api_base": "http://localhost:20127/v1",
   "anthropic_api_key": "your-9router-api-key"
 }
 ```
@@ -1062,7 +1062,7 @@ Vertex Partner (Anthropic / DeepSeek / GLM / Qwen از طریق Vertex):
 ### Codex CLI
 
 ```bash
-export OPENAI_BASE_URL="http://localhost:20128"
+export OPENAI_BASE_URL="http://localhost:20127"
 export OPENAI_API_KEY="your-9router-api-key"
 
 codex "your prompt"
@@ -1090,7 +1090,7 @@ codex "your prompt"
   "models": {
     "providers": {
       "9router": {
-        "baseUrl": "http://127.0.0.1:20128/v1",
+        "baseUrl": "http://127.0.0.1:20127/v1",
         "apiKey": "sk_9router",
         "api": "openai-completions",
         "models": [
@@ -1111,7 +1111,7 @@ codex "your prompt"
 
 ```
 ارائه‌دهنده: سازگار با OpenAI
-آدرس پایه: http://localhost:20128/v1
+آدرس پایه: http://localhost:20127/v1
 کلید API: [از داشبورد]
 مدل: cc/claude-opus-4-7
 ```
@@ -1134,10 +1134,12 @@ npm run build
 export JWT_SECRET="your-secure-secret-change-this"
 export INITIAL_PASSWORD="your-password"
 export DATA_DIR="/var/lib/9router"
-export PORT="20128"
+export PORT="20127"
 export HOSTNAME="0.0.0.0"
+export DXR_ALLOW_NETWORK="1"   # required for any non-loopback bind
 export NODE_ENV="production"
-export NEXT_PUBLIC_BASE_URL="http://localhost:20128"
+export DXR_MASTER_KEY="$(openssl rand -hex 32)"   # encrypts stored provider credentials; keep it
+export NEXT_PUBLIC_BASE_URL="http://localhost:20127"
 export NEXT_PUBLIC_CLOUD_URL="https://9router.com"
 export API_KEY_SECRET="endpoint-proxy-api-key-secret"
 export MACHINE_ID_SALT="endpoint-proxy-salt"
@@ -1164,7 +1166,7 @@ pm2 startup
 ```bash
 docker run -d \
   --name 9router \
-  -p 20128:20128 \
+  -p 127.0.0.1:20128:20128 \
   -v "$HOME/.9router:/app/data" \
   -e DATA_DIR=/app/data \
   decolua/9router:latest
@@ -1178,14 +1180,14 @@ docker run -d \
 git clone https://github.com/decolua/9router.git
 cd 9router/app
 docker build -t 9router .
-docker run -d --name 9router -p 20128:20128 \
+docker run -d --name 9router -p 127.0.0.1:20128:20128 \
   -v "$HOME/.9router:/app/data" -e DATA_DIR=/app/data 9router
 ```
 
 **پیش‌فرض‌های کانتینر:**
 
 - `PORT=20128`
-- `HOSTNAME=0.0.0.0`
+- `HOSTNAME=0.0.0.0` + `DXR_ALLOW_NETWORK=1`
 
 **دستورات مفید:**
 
@@ -1208,7 +1210,7 @@ docker pull decolua/9router:latest   # به‌روزرسانی به آخرین �
 | `PORT`                                               | پیش‌فرض فریم‌ورک                        | پورت سرویس (`۲۰۱۲۸` در مثال‌ها)                                                  |
 | `HOSTNAME`                                           | پیش‌فرض فریم‌ورک                        | هاست بایند (داکر پیش‌فرض `۰.۰.۰.۰` است)                                            |
 | `NODE_ENV`                                           | پیش‌فرض زمان اجرا                          | برای استقرار `production` را تنظیم کنید                                                         |
-| `BASE_URL`                                           | `http://localhost:20128`                 | آدرس پایه داخلی سمت سرور که توسط کارهای همگام‌سازی ابری استفاده می‌شود                               |
+| `BASE_URL`                                           | `http://localhost:20127`                 | آدرس پایه داخلی سمت سرور که توسط کارهای همگام‌سازی ابری استفاده می‌شود                               |
 | `CLOUD_URL`                                          | `https://9router.com`                    | آدرس پایه نقطه پایانی همگام‌سازی ابری سمت سرور                                            |
 | `NEXT_PUBLIC_BASE_URL`                               | `http://localhost:3000`                  | آدرس پایه عمومی/سازگار با گذشته (برای زمان اجرای سرور `BASE_URL` را ترجیح دهید)          |
 | `NEXT_PUBLIC_CLOUD_URL`                              | `https://9router.com`                    | آدرس ابری عمومی/سازگار با گذشته (برای زمان اجرای سرور `CLOUD_URL` را ترجیح دهید)        |
@@ -1341,7 +1343,7 @@ docker pull decolua/9router:latest   # به‌روزرسانی به آخرین �
 
 **داشبورد در پورت اشتباه باز می‌شود**
 
-- `PORT=20128` و `NEXT_PUBLIC_BASE_URL=http://localhost:20128` را تنظیم کنید
+- `PORT=20127` و `NEXT_PUBLIC_BASE_URL=http://localhost:20127` را تنظیم کنید
 
 **اولین ورود کار نمی‌کند**
 
@@ -1370,7 +1372,7 @@ docker pull decolua/9router:latest   # به‌روزرسانی به آخرین �
 ### تکمیل‌های چت
 
 ```bash
-POST http://localhost:20128/v1/chat/completions
+POST http://localhost:20127/v1/chat/completions
 Authorization: Bearer your-api-key
 Content-Type: application/json
 
@@ -1386,7 +1388,7 @@ Content-Type: application/json
 ### لیست مدل‌ها
 
 ```bash
-GET http://localhost:20128/v1/models
+GET http://localhost:20127/v1/models
 Authorization: Bearer your-api-key
 
 → همه مدل‌ها + ترکیب‌ها را در قالب OpenAI برمی‌گرداند
@@ -1433,7 +1435,7 @@ Authorization: Bearer your-api-key
 
 ## 📄 مجوز
 
-مجوز MIT - برای جزئیات به [LICENSE](LICENSE) مراجعه کنید.
+مجوز MIT - برای جزئیات به [LICENSE](../LICENSE) مراجعه کنید.
 
 ---
 

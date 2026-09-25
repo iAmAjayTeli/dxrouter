@@ -11,7 +11,7 @@
   [![Downloads](https://img.shields.io/npm/dm/9router.svg)](https://www.npmjs.com/package/9router)
   [![License](https://github.com/decolua/9router/blob/main/LICENSE)](https://github.com/decolua/9router/blob/main/LICENSE)
   
-  [🚀 Bắt đầu nhanh](#-quick-start) • [💡 Tính năng](#-key-features) • [📖 Cài đặt](#-setup-guide) • [🌐 Website](https://9router.com)
+  [🚀 Bắt đầu nhanh](#-bắt-đầu-nhanh) • [💡 Tính năng](#-các-tính-năng-chính) • [📖 Cài đặt](#-hướng-dẫn-thiết-lập) • [🌐 Website](https://9router.com)
 </div>
 
 ---
@@ -43,7 +43,7 @@
 │  Công cụ    │  (Claude Code, Codex, OpenClaw, Cursor, Cline, Antigravity...)
 │  CLI AI     │
 └──────┬──────┘
-       │ http://localhost:20128/v1
+       │ http://localhost:20127/v1
        ↓
 ┌─────────────────────────────────────────────┐
 │           9Router (Smart Router)            │
@@ -73,7 +73,7 @@ npm install -g 9router
 9router
 ```
 
-🎉 Bảng điều khiển (Dashboard) sẽ tự động mở tại `http://localhost:20128`
+🎉 Bảng điều khiển (Dashboard) sẽ tự động mở tại `http://localhost:20127`
 
 **2. Kết nối nhà cung cấp MIỄN PHÍ (không cần đăng ký):**
 
@@ -83,7 +83,7 @@ Bảng điều khiển → Providers → Kết nối **Kiro AI** (~50 credits/th
 
 ```
 Cài đặt Claude Code/Codex/OpenClaw/Cursor/Cline/Antigravity:
-  Endpoint: http://localhost:20128/v1
+  Endpoint: http://localhost:20127/v1
   API Key: [sao chép từ bảng điều khiển]
   Model: kr/claude-sonnet-4.5
 ```
@@ -97,19 +97,19 @@ Gói kho lưu trữ này là riêng tư (`9router-app`), vì vậy việc chạy
 ```bash
 cp .env.example .env
 npm install
-PORT=20128 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run dev
+PORT=20127 NEXT_PUBLIC_BASE_URL=http://localhost:20127 npm run dev
 ```
 
 Chế độ Production:
 
 ```bash
 npm run build
-PORT=20128 HOSTNAME=0.0.0.0 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run start
+PORT=20127 HOSTNAME=127.0.0.1 NEXT_PUBLIC_BASE_URL=http://localhost:20127 npm run start
 ```
 
 URL mặc định:
-- Bảng điều khiển Dashboard: `http://localhost:20128/dashboard`
-- API tương thích OpenAI: `http://localhost:20128/v1`
+- Bảng điều khiển Dashboard: `http://localhost:20127/dashboard`
+- API tương thích OpenAI: `http://localhost:20127/v1`
 
 ---
 
@@ -863,7 +863,7 @@ Chi phí: $0 mãi mãi!
 
 ```
 Settings → Models → Advanced:
-  OpenAI API Base URL: http://localhost:20128/v1
+  OpenAI API Base URL: http://localhost:20127/v1
   OpenAI API Key: [từ bảng điều khiển 9router]
   Model: cc/claude-opus-4-6
 ``Hoặc sử dụng combo: `premium-coding`
@@ -874,7 +874,7 @@ Chỉnh sửa `~/.claude/config.json`:
 
 ```json
 {
-  "anthropic_api_base": "http://localhost:20128/v1",
+  "anthropic_api_base": "http://localhost:20127/v1",
   "anthropic_api_key": "your-9router-api-key"
 }
 ```
@@ -882,7 +882,7 @@ Chỉnh sửa `~/.claude/config.json`:
 ### Codex CLI
 
 ```bash
-export OPENAI_BASE_URL="http://localhost:20128"
+export OPENAI_BASE_URL="http://localhost:20127"
 export OPENAI_API_KEY="your-9router-api-key"
 
 codex "prompt của bạn"
@@ -910,7 +910,7 @@ Bảng điều khiển → CLI Tools → OpenClaw → Chọn Mô hình → Áp d
   "models": {
     "providers": {
       "9router": {
-        "baseUrl": "://127.0.0.1:20128/v1",
+        "baseUrl": "://127.0.0.1:20127/v1",
         "apiKey": "sk_9router",
         "api": "openai-completions",
         "models": [
@@ -931,7 +931,7 @@ Bảng điều khiển → CLI Tools → OpenClaw → Chọn Mô hình → Áp d
 
 ```
 Provider: OpenAI Compatible
-Base URL: http://localhost:20128/v1
+Base URL: http://localhost:20127/v1
 API Key: [từ bảng điều khiển]
 Model: cc/claude-opus-4-6
 ```
@@ -954,10 +954,12 @@ npm run build
 export JWT="your-secure-secret-change-this"
 export INITIAL_PASSWORD="your-password"
 export DATA_DIR="/var/lib/9router"
-export PORT="20128"
+export PORT="20127"
 export HOSTNAME="0.0.0.0"
+export DXR_ALLOW_NETWORK="1"   # required for any non-loopback bind
 export NODE_ENV="production"
-export NEXT_PUBLIC_BASE_URL="http://localhost:20128"
+export DXR_MASTER_KEY="$(openssl rand -hex 32)"   # encrypts stored provider credentials; keep it
+export NEXT_PUBLIC_BASE_URL="http://localhost:20127"
 export NEXT_PUBLIC_CLOUD_URL="https://9router.com"
 export API_KEY_SECRET="endpoint-proxy-api-key-secret"
 export MACHINE_ID_SALT="endpoint-proxy-salt"
@@ -981,7 +983,7 @@ docker build -t 9router .
 # Chạy container (lệnh được sử dụng trong thiết lập hiện tại)
 docker run -d \
   --name 9router \
-  -p 20128:20128 \
+  -p 127.0.0.1:20128:20128 \
   --env-file /root/dev/9router/.env \
   -v 9router-data:/app/data \
   -v 9router-usage:/root/.9router \
@@ -993,7 +995,7 @@ Lệnh di động (nếu bạn đã ở gốc kho lưu trữ):
 ```bash
 docker run -d \
   --name 9router \
-  -p 20128:20128 \
+  -p 127.0.0.1:20128:20128 \
   --env-file ./.env \
   -v 9router-data:/app/data \
   -v 9router-usage:/root/.9router \
@@ -1002,7 +1004,7 @@ docker run -d \
 
 Mặc định container:
 - `PORT=20128`
-- `HOSTNAME=0.0.0.0`
+- `HOSTNAME=0.0.0.0` + `DXR_ALLOW_NETWORK=1`
 
 Các lệnh hữu ích:
 
@@ -1019,10 +1021,10 @@ docker stop 9router && docker rm 9router
 | `JWT_SECRET` | Tự động sinh (`~/.9router/jwt-secret`) | Bí mật ký JWT cho cookie xác thực bảng điều khiển (đặt để chia sẻ giữa nhiều instance) |
 | `INITIAL_PASSWORD` | `123456` | Mật khẩu đăng nhập đầu tiên khi không có hash đã lưu tồn tại |
 | `DATA_DIR` | `~/.9router` |ị trí cơ sở dữ liệu ứng dụng chính (`db.json`) |
-| `PORT` | framework default | Cổng dịch vụ (`20128` trong các ví dụ) |
+| `PORT` | framework default | Cổng dịch vụ (`20127` trong các ví dụ) |
 | `HOSTNAME` | framework default | Bind host (Docker mặc định là `0.0.0.0`) |
 | `NODE_ENV` | runtime default | Đặt `production` để triển khai |
-| `BASE_URL` | `http://localhost:20128` | URL cơ sở nội bộ phía máy chủ được sử dụng bởi các tác vụ đồng bộ đám mây |
+| `BASE_URL` | `http://localhost:20127` | URL cơ sở nội bộ phía máy chủ được sử dụng bởi các tác vụ đồng bộ đám mây |
 | `CLOUD_URL` | `https://9router.com` | URL cơ sở endpoint đồng bộ đám mây phía máy chủ |
 | `NEXT_PUBLIC_BASE_URL` | `http://localhost:3000` | URL cơ sở tương thích ngược/công khai (ưu tiên `BASE_URL` cho runtime máy chủ) |
 | `NEXT_PUBLIC_CLOUD_URL` | `https://9router.com` | URL đám mây tương thích ngược/công khai (ưu tiên `CLOUD_URL` cho runtime máy chủ) |
@@ -1115,10 +1117,10 @@ Ghi chú:
 - Sử dụng tầng miễn phí (Gemini CLI, iFlow) cho các tác vụ không quan trọng
 
 **Bảng điều khiển mở sai cổng**
-- Đặt `PORT=20128` và `NEXT_PUBLIC_BASE_URL=http://localhost:20128`
+- Đặt `PORT=20127` và `NEXT_PUBLIC_BASE_URL=http://localhost:20127`
 
 **Lỗi đồng bộ đám mây**
-- Xác minh `BASE_URL` trỏ đến phiên bản đang chạy của bạn (ví dụ: `http://localhost:20128`)
+- Xác minh `BASE_URL` trỏ đến phiên bản đang chạy của bạn (ví dụ: `http://localhost:20127`)
 - Xác minh `CLOUD_URL` trỏ đến endpoint đám mây dự kiến của bạn (ví dụ: `https://9router.com`)
 - Giữ các giá trị `NEXT_PUBLIC_*` phù hợp với giá trị phía máy chủ khi có thể.
 
@@ -1157,7 +1159,7 @@ Ghi chú:
 ### Chat Completions
 
 ```bash
-POST http://localhost:20128/v1/chat/completions
+POST http://localhost:20127/v1/chat/completions
 Authorization: Bearer your-api-key
 Content-Type: application/json
 
@@ -1173,7 +1175,7 @@ Content-Type: application/json
 ### Liệt kê Mô hình
 
 ```bash
-GET http://localhost:20128/v1/models
+GET http://localhost:20127/v1/models
 Authorization: Bearer your-api-key
 
 → Trả về tất cả các mô hình + combo ở định dạng OpenAI
@@ -1215,7 +1217,7 @@ OPENAI_API_KEY="your-cloud-key" bash tester/security/test-cloud-openai-compatibl
 
 Hành vi dự kiến từ việc xác thực gần đây:
 
-- cục bộ (`http://127.0.0.1:20128/v1/chat/completions`): hoạt động với `stream=false` và `stream=true`.
+- cục bộ (`http://127.0.0.1:20127/v1/chat/completions`): hoạt động với `stream=false` và `stream=true`.
 - Runtime Docker (cùng đường dẫn API được expose bởi container): các kiểm tra hardening đạt, cloud auth guard hoạt động, chế độ API key nghiêm ngặt hoạt động khi được bật.
 - Endpoint đám mây công khai (`https://9router.com/v1/chat/completions`):
   - `stream=true`: dự kiến thành công (trả về các khối SSE).

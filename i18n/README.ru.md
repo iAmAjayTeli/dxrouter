@@ -15,7 +15,7 @@
   [![Downloads](https://img.shields.io/npm/dm/9router.svg)](https://www.npmjs.com/package/9router)
   [![License](https://img.shields.io/npm/l/9router.svg)](https://github.com/decolua/9router/blob/main/LICENSE)
   
-  [🚀 Быстрый старт](#-quick-start) • [💡 Возможности](#-key-features) • [📖 Установка](#-setup-guide) • [🌐 Сайт](https://9router.com)
+  [🚀 Быстрый старт](#-быстрый-старт) • [💡 Возможности](#-ключевые-возможности) • [📖 Установка](#-руководство-по-настройке) • [🌐 Сайт](https://9router.com)
 </div>
 
 ---
@@ -45,7 +45,7 @@
 │  Your CLI   │  (Claude Code, Codex, Gemini CLI, OpenClaw, Cursor, Cline...)
 │   Tool      │
 └──────┬──────┘
-       │ http://localhost:20128/v1
+       │ http://localhost:20127/v1
        ↓
 ┌────────────────────────────────────────┐
 │           9Router (Smart Router)        │
@@ -74,7 +74,7 @@ npm install -g 9router
 9router
 ```
 
-🎉 Панель управления откроется на `http://localhost:20128`
+🎉 Панель управления откроется на `http://localhost:20127`
 
 **2. Подключите БЕСПЛАТНОГО провайдера (без подписки):**
 
@@ -84,7 +84,7 @@ npm install -g 9router
 
 ```
 Настройки Claude Code/Codex/Gemini CLI/OpenClaw/Cursor/Cline:
-  Endpoint: http://localhost:20128/v1
+  Endpoint: http://localhost:20127/v1
   API Key: [скопируйте из панели управления]
   Model: if/kimi-k2-thinking
 ```
@@ -98,19 +98,19 @@ npm install -g 9router
 ```bash
 cp .env.example .env
 npm install
-PORT=20128 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run dev
+PORT=20127 NEXT_PUBLIC_BASE_URL=http://localhost:20127 npm run dev
 ```
 
 Режим Production:
 
 ```bash
 npm run build
-PORT=20128 HOSTNAME=0.0.0.0 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run start
+PORT=20127 HOSTNAME=127.0.0.1 NEXT_PUBLIC_BASE_URL=http://localhost:20127 npm run start
 ```
 
 URL по умолчанию:
-- Панель управления: `http://localhost:20128/dashboard`
-- OpenAI-совместимый API: `http://localhost:20128/v1`
+- Панель управления: `http://localhost:20127/dashboard`
+- OpenAI-совместимый API: `http://localhost:20127/v1`
 
 ---
 
@@ -864,7 +864,7 @@ Combo: "openclaw-free"
 
 ```
 Settings → Models → Advanced:
-  OpenAI API Base URL: http://localhost:20128/v1
+  OpenAI API Base URL: http://localhost:20127/v1
   OpenAI API Key: [из панели управления 9router]
   Model: cc/claude-opus-4-6
 ```
@@ -877,7 +877,7 @@ Settings → Models → Advanced:
 
 ```json
 {
-  "anthropic_api_base": "http://localhost:20128/v1",
+  "anthropic_api_base": "http://localhost:20127/v1",
   "anthropic_api_key": "your-9router-api-key"
 }
 ```
@@ -885,7 +885,7 @@ Settings → Models → Advanced:
 ### Codex CLI
 
 ```bash
-export OPENAI_BASE_URL="http://localhost:20128"
+export OPENAI_BASE_URL="http://localhost:20127"
 export OPENAI_API_KEY="your-9router-api-key"
 
 codex "ваш промпт"
@@ -913,7 +913,7 @@ codex "ваш промпт"
   "models": {
     "providers": {
       "9router": {
-        "baseUrl": "http://127.0.0.1:20128/v1",
+        "baseUrl": "http://127.0.0.1:20127/v1",
         "apiKey": "sk_9router",
         "api": "openai-completions",
         "models": [
@@ -934,7 +934,7 @@ codex "ваш промпт"
 
 ```
 Provider: OpenAI Compatible
-Base URL: http://localhost:20128/v1
+Base URL: http://localhost:20127/v1
 API Key: [из панели управления]
 Model: cc/claude-opus-4-6
 ```
@@ -957,10 +957,12 @@ npm run build
 export JWT="your-secure-secret-change-this"
 export INITIAL_PASSWORD="your-password"
 export DATA_DIR="/var/lib/9router"
-export PORT="20128"
+export PORT="20127"
 export HOSTNAME="0.0.0.0"
+export DXR_ALLOW_NETWORK="1"   # required for any non-loopback bind
 export NODE_ENV="production"
-export NEXT_PUBLIC_BASE_URL="http://localhost:20128"
+export DXR_MASTER_KEY="$(openssl rand -hex 32)"   # encrypts stored provider credentials; keep it
+export NEXT_PUBLIC_BASE_URL="http://localhost:20127"
 export NEXT_PUBLIC_CLOUD_URL="https://9router.com"
 export API_KEY_SECRET="endpoint-proxy-api-key-secret"
 export MACHINE_ID_SALT="endpoint-proxy-salt"
@@ -984,7 +986,7 @@ docker build -t 9router .
 # Run container (command used in current setup)
 docker run -d \
   --name 9router \
-  -p 20128:20128 \
+  -p 127.0.0.1:20128:20128 \
   --env-file /root/dev/9router/.env \
   -v 9router-data:/app/data \
   -v 9router-usage:/root/.9router \
@@ -996,7 +998,7 @@ docker run -d \
 ```bash
 docker run -d \
   --name 9router \
-  -p 20128:20128 \
+  -p 127.0.0.1:20128:20128 \
   --env-file ./.env \
   -v 9router-data:/app/data \
   -v 9router-usage:/root/.9router \
@@ -1005,7 +1007,7 @@ docker run -d \
 
 Значения по умолчанию контейнера:
 - `PORT=20128`
-- `HOSTNAME=0.0.0.0`
+- `HOSTNAME=0.0.0.0` + `DXR_ALLOW_NETWORK=1`
 
 Полезные команды:
 
@@ -1022,10 +1024,10 @@ docker stop 9router && docker rm 9router
 | `JWT_SECRET` | Автогенерация (`~/.9router/jwt-secret`) | Секрет подписи JWT для cookie аутентификации панели (задайте для общего доступа между инстансами) |
 | `INITIAL_PASSWORD` | `123456` | Пароль первого входа при отсутствии сохранённого хеша |
 | `DATA_DIR` | `~/.9router` | Расположение основной БД приложения (`db.json`) |
-| `PORT` | framework default | Порт сервиса (`20128` в примерах) |
+| `PORT` | framework default | Порт сервиса (`20127` в примерах) |
 | `HOSTNAME` | framework default | Bind host (Docker по умолчанию `0.0.0.0`) |
 | `NODE_ENV` | runtime default | Установите `production` для развёртывания |
-| `BASE_URL` | `http://localhost:20128` | Внутренний серверный базовый URL для задач облачной синхронизации |
+| `BASE_URL` | `http://localhost:20127` | Внутренний серверный базовый URL для задач облачной синхронизации |
 | `CLOUD_URL` | `https://9router.com` | Серверный базовый URL эндпоинта облачной синхронизации |
 | `NEXT_PUBLIC_BASE_URL` | `http://localhost:3000` | Обратно совместимый/публичный базовый URL (приоритет `BASE_URL` для серверного рантайма) |
 | `NEXT_PUBLIC_CLOUD_URL` | `https://9router.com` | Обратно совместимый/публичный облачный URL (приоритет `CLOUD_URL` для серверного рантайма) |
@@ -1118,10 +1120,10 @@ docker stop 9router && docker rm 9router
 - Используйте бесплатные уровни (Gemini CLI, iFlow) для некритичных задач
 
 **Панель открывается на неверном порту**
-- Установите `PORT=20128` и `NEXT_PUBLIC_BASE_URL=http://localhost:20128`
+- Установите `PORT=20127` и `NEXT_PUBLIC_BASE_URL=http://localhost:20127`
 
 **Ошибки облачной синхронизации**
-- Убедитесь, что `BASE_URL` указывает на ваш работающий инстанс (например, `http://localhost:20128`)
+- Убедитесь, что `BASE_URL` указывает на ваш работающий инстанс (например, `http://localhost:20127`)
 - Убедитесь, что `CLOUD_URL` указывает на ожидаемый облачный эндпоинт (например, `https://9router.com`)
 - По возможности держите значения `NEXT_PUBLIC_*` согласованными с серверными значениями.
 
@@ -1160,7 +1162,7 @@ docker stop 9router && docker rm 9router
 ### Chat Completions
 
 ```bash
-POST http://localhost:20128/v1/chat/completions
+POST http://localhost:20127/v1/chat/completions
 Authorization: Bearer your-api-key
 Content-Type: application/json
 
@@ -1176,7 +1178,7 @@ Content-Type: application/json
 ### Список моделей
 
 ```bash
-GET http://localhost:20128/v1/models
+GET http://localhost:20127/v1/models
 Authorization: Bearer your-api-key
 
 → Возвращает все модели + комбо в формате OpenAI
@@ -1218,7 +1220,7 @@ OPENAI_API_KEY="your-cloud-key" bash tester/security/test-cloud-openai-compatibl
 
 Ожидаемое поведение по результатам недавней проверки:
 
-- Локально (`http://127.0.0.1:20128/v1/chat/completions`): работает с `stream=false` и `stream=true`.
+- Локально (`http://127.0.0.1:20127/v1/chat/completions`): работает с `stream=false` и `stream=true`.
 - Docker-рантайм (тот же API-путь, экспонируемый контейнером): hardening-проверки проходят, cloud auth guard работает, строгий режим API-ключа работает при включении.
 - Публичный облачный эндпоинт (`https://9router.com/v1/chat/completions`):
   - `stream=true`: ожидается успех (возвращает SSE-чанки).

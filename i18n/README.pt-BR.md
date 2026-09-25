@@ -50,7 +50,7 @@
 │  Sua CLI   │  (Claude Code, Codex, OpenClaw, Cursor, Cline...)
 │   Ferramenta│
 └──────┬──────┘
-       │ http://localhost:20128/v1
+       │ http://localhost:20127/v1
        ↓
 ┌─────────────────────────────────────────────┐
 │           9Router (Roteador inteligente)            │
@@ -80,7 +80,7 @@ npm install -g 9router
 9router
 ```
 
-🎉 O painel abre em `http://localhost:20128`
+🎉 O painel abre em `http://localhost:20127`
 
 **2. Conecte um provedor GRATUITO (sem necessidade de inscrição):**
 
@@ -90,7 +90,7 @@ Painel → Provedores → Conecte **Kiro AI** (~50 créditos/mês grátis: Claud
 
 ```
 Configurações do Claude Code/Codex/OpenClaw/Cursor/Cline:
-  Endpoint: http://localhost:20128/v1
+  Endpoint: http://localhost:20127/v1
   API Key: [copie do painel]
   Model: kr/claude-sonnet-4.5
 ```
@@ -104,20 +104,20 @@ Este pacote de repositório é privado (`9router-app`), portanto, a execução p
 ```bash
 cp .env.example .env
 npm install
-PORT=20128 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run dev
+PORT=20127 NEXT_PUBLIC_BASE_URL=http://localhost:20127 npm run dev
 ```
 
 Modo de produção:
 
 ```bash
 npm run build
-PORT=20128 HOSTNAME=0.0.0.0 NEXT_PUBLIC_BASE_URL=http://localhost:20128 npm run start
+PORT=20127 HOSTNAME=127.0.0.1 NEXT_PUBLIC_BASE_URL=http://localhost:20127 npm run start
 ```
 
 URLs padrão:
 
-- Painel: `http://localhost:20128/dashboard`
-- API compatível com OpenAI: `http://localhost:20128/v1`
+- Painel: `http://localhost:20127/dashboard`
+- API compatível com OpenAI: `http://localhost:20127/v1`
 
 ---
 
@@ -1124,7 +1124,7 @@ Custo: $0 (+ economia de 20–40% de tokens com RTK)!
 
 ```
 Configurações → Modelos → Avançado:
-  OpenAI API Base URL: http://localhost:20128/v1
+  OpenAI API Base URL: http://localhost:20127/v1
   OpenAI API Key: [copie do painel do 9Router]
   Model: cc/claude-opus-4-7
 ```
@@ -1137,7 +1137,7 @@ Editar `~/.claude/config.json`:
 
 ```json
 {
-  "anthropic_api_base": "http://localhost:20128/v1",
+  "anthropic_api_base": "http://localhost:20127/v1",
   "anthropic_api_key": "your-9router-api-key"
 }
 ```
@@ -1145,7 +1145,7 @@ Editar `~/.claude/config.json`:
 ### CLI do Codex
 
 ```bash
-export OPENAI_BASE_URL="http://localhost:20128"
+export OPENAI_BASE_URL="http://localhost:20127"
 export OPENAI_API_KEY="your-9router-api-key"
 
 codex "seu prompt"
@@ -1173,7 +1173,7 @@ Painel → Ferramentas CLI → OpenClaw → Selecionar modelo → Aplicar
   "models": {
     "providers": {
       "9router": {
-        "baseUrl": "http://127.0.0.1:20128/v1",
+        "baseUrl": "http://127.0.0.1:20127/v1",
         "apiKey": "sk_9router",
         "api": "openai-completions",
         "models": [
@@ -1194,7 +1194,7 @@ Painel → Ferramentas CLI → OpenClaw → Selecionar modelo → Aplicar
 
 ```
 Provedor: compatível com OpenAI
-Base URL: http://localhost:20128/v1
+Base URL: http://localhost:20127/v1
 API Key: [copie do painel]
 Model: cc/claude-opus-4-7
 ```
@@ -1217,10 +1217,12 @@ npm run build
 export JWT_SECRET="your-secure-secret-change-this"
 export INITIAL_PASSWORD="your-password"
 export DATA_DIR="/var/lib/9router"
-export PORT="20128"
+export PORT="20127"
 export HOSTNAME="0.0.0.0"
+export DXR_ALLOW_NETWORK="1"   # required for any non-loopback bind
 export NODE_ENV="production"
-export NEXT_PUBLIC_BASE_URL="http://localhost:20128"
+export DXR_MASTER_KEY="$(openssl rand -hex 32)"   # encrypts stored provider credentials; keep it
+export NEXT_PUBLIC_BASE_URL="http://localhost:20127"
 export NEXT_PUBLIC_CLOUD_URL="https://9router.com"
 export API_KEY_SECRET="endpoint-proxy-api-key-secret"
 export MACHINE_ID_SALT="endpoint-proxy-salt"
@@ -1247,7 +1249,7 @@ Imagens publicadas (multiplataforma `linux/amd64` + `linux/arm64`):
 ```bash
 docker run -d \
   --name 9router \
-  -p 20128:20128 \
+  -p 127.0.0.1:20128:20128 \
   -v "$HOME/.9router:/app/data" \
   -e DATA_DIR=/app/data \
   decolua/9router:latest
@@ -1261,14 +1263,14 @@ docker run -d \
 git clone https://github.com/decolua/9router.git
 cd 9router/app
 docker build -t 9router .
-docker run -d --name 9router -p 20128:20128 \
+docker run -d --name 9router -p 127.0.0.1:20128:20128 \
   -v "$HOME/.9router:/app/data" -e DATA_DIR=/app/data 9router
 ```
 
 **Padrões do contêiner:**
 
 - `PORT=20128`
-- `HOSTNAME=0.0.0.0`
+- `HOSTNAME=0.0.0.0` + `DXR_ALLOW_NETWORK=1`
 
 **Comandos úteis:**
 
@@ -1288,10 +1290,10 @@ docker pull decolua/9router:latest   # atualizar para a versão mais recente
 | `JWT_SECRET` | Gerado automaticamente (`~/.9router/jwt-secret`) | Segredo de assinatura JWT para cookie de autenticação do painel (substituir para compartilhar entre instâncias) |
 | `INITIAL_PASSWORD` | `123456` | Primeira senha de login quando não existe hash salvo |
 | `DATA_DIR` | `~/.9router` | Localização principal dos dados do aplicativo (SQLite em `$DATA_DIR/db/data.sqlite`) |
-| `PORT` | padrão da estrutura | Porta de serviço (`20128` nos exemplos) |
+| `PORT` | padrão da estrutura | Porta de serviço (`20127` nos exemplos) |
 | `HOSTNAME` | padrão da estrutura | Host de vinculação (o padrão do Docker é `0.0.0.0`) |
 | `NODE_ENV` | padrão de tempo de execução | Definir `production` para implantação |
-| `BASE_URL` | `http://localhost:20128` | URL base interna do lado do servidor usada por trabalhos de sincronização na nuvem |
+| `BASE_URL` | `http://localhost:20127` | URL base interna do lado do servidor usada por trabalhos de sincronização na nuvem |
 | `CLOUD_URL` | `https://9router.com` | URL base do endpoint de sincronização na nuvem do lado do servidor |
 | `NEXT_PUBLIC_BASE_URL` | `http://localhost:3000` | URL de base pública/compatível com versões anteriores (prefira `BASE_URL` para tempo de execução do servidor) |
 | `NEXT_PUBLIC_CLOUD_URL` | `https://9router.com` | URL de nuvem pública/compatível com versões anteriores (prefira `CLOUD_URL` para tempo de execução do servidor) |
@@ -1424,7 +1426,7 @@ Notas:
 
 **Painel abre na porta errada**
 
-- Definir `PORT=20128` e `NEXT_PUBLIC_BASE_URL=http://localhost:20128`
+- Definir `PORT=20127` e `NEXT_PUBLIC_BASE_URL=http://localhost:20127`
 
 **Primeiro login não funciona**
 
@@ -1453,7 +1455,7 @@ Notas:
 ### Chat Completions
 
 ```bash
-POST http://localhost:20128/v1/chat/completions
+POST http://localhost:20127/v1/chat/completions
 Authorization: Bearer your-api-key
 Content-Type: application/json
 
@@ -1469,7 +1471,7 @@ Content-Type: application/json
 ### Listar modelos
 
 ```bash
-GET http://localhost:20128/v1/models
+GET http://localhost:20127/v1/models
 Authorization: Bearer your-api-key
 
 → Retorna todos os modelos e combos no formato OpenAI
