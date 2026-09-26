@@ -1,4 +1,5 @@
 node_modules/
-package-lock.json
+# package-lock.json is deliberately tracked: CI runs `npm ci --prefix tests`, which
+# fails without it. See the lockfile note in the root .gitignore.
 .vite/
 coverage/

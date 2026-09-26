@@ -64,7 +64,12 @@ PUBLIC.md
 Thanks.md
 PUBLIC.en.md
 PR/*
+# Lockfiles are ignored everywhere except the two that CI installs from. `npm ci` fails
+# outright without a lockfile, and actions/setup-node `cache: npm` refuses to start
+# without one, so leaving these untracked made every CI run fail before a single test.
 package-lock.json
+!/package-lock.json
+!/tests/package-lock.json
 
 
 #Ignore vscode AI rules
