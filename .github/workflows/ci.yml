@@ -33,7 +33,16 @@ jobs:
 
   m0-tests:
     name: M0 tests (security, continuity, protocol)
-    runs-on: ubuntu-latest
+    # ubuntu-latest moves to Ubuntu 26.04 between 2026-10-19 and 2026-11-19
+    # (actions/runner-images#14748). This job is the one with platform-sensitive
+    # dependencies: the better-sqlite3 native install and lsof for the updater's
+    # port lookup. Running 26.04 alongside shows a break before the label moves
+    # under us. Drop the extra leg once ubuntu-latest is 26.04.
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-26.04]
+    runs-on: ${{ matrix.runner }}
     # Several tests spawn a child synchronously; a child that hangs blocks the
     # vitest worker, so testTimeout never fires. Bound the job instead of
     # inheriting GitHub's 360-minute default.
