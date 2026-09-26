@@ -14,6 +14,14 @@ concurrency:
 
 jobs:
   build-deploy:
+    # Upstream's docs site, not this repository's. The deploy step pushes into
+    # 9router/9router.github.io with a deploy key only upstream holds, so in this
+    # fork every run that reached it failed after a full build — and had the key ever
+    # been configured, it would have published into another project's namespace (the
+    # same reason docker-publish.yml no longer pushes to upstream's Docker Hub repo).
+    # Gated rather than deleted so the file stays mergeable with upstream. Publishing
+    # DXRouter docs means choosing a DXRouter-owned target first.
+    if: github.repository == 'decolua/9router'
     runs-on: ubuntu-latest
     defaults:
       run:
