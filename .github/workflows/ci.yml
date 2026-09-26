@@ -12,14 +12,19 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Read-only token for every job: nothing here writes to the repository, and
+# stating it keeps a fork or a changed repository default from widening it.
+permissions:
+  contents: read
+
 jobs:
   boundary:
     name: I1 import boundary
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       # No install step on purpose: the checker is dependency-free so the
@@ -34,8 +39,8 @@ jobs:
     # inheriting GitHub's 360-minute default.
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -55,8 +60,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
