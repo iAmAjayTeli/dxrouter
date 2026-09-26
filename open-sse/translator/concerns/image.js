@@ -19,8 +19,8 @@ import { MAX_IMAGE_BYTES, FETCH_TIMEOUT_MS, IMAGE_SIGNATURES, BLOCKED_HOSTS } fr
 // True if an IPv4/IPv6 address is private/reserved (SSRF target).
 function isPrivateIp(ip) {
   if (!ip) return true;
-  // IPv6 loopback / unique-local / link-local
-  if (ip === "::1" || ip.startsWith("fc") || ip.startsWith("fd") || ip.startsWith("fe80")) return true;
+  // IPv6 unspecified (Linux connects "::" to loopback) / loopback / unique-local fc00::/7 / link-local fe80::/10
+  if (ip === "::" || ip === "::1" || ip.startsWith("fc") || ip.startsWith("fd") || /^fe[89ab]/i.test(ip)) return true;
   // IPv4-mapped IPv6 (::ffff:a.b.c.d) -> extract tail
   const v4 = ip.includes(".") ? ip.split(":").pop() : ip;
   const parts = v4.split(".").map((n) => Number.parseInt(n, 10));
