@@ -1,21 +1,18 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { getSettings } from "@/lib/localDb";
 import { formatX509Certificate } from "@/lib/auth/saml.js";
-import { verifyDashboardAuthToken } from "@/lib/auth/dashboardSession";
+import { isAuthenticated } from "@/dashboardGuard";
 
-async function canAccessTestRoute() {
-  const settings = await getSettings();
-  if (settings.requireLogin === false) return true;
-
-  const cookieStore = await cookies();
-  const token = cookieStore.get("auth_token")?.value;
-  return await verifyDashboardAuthToken(token);
+// /api/auth/saml/* is public in the guard (start and acs must be), so this route
+// authenticates itself — with the guard's rules. The local copy honoured
+// requireLogin=false from ANY peer and skipped the cross-site check.
+async function canAccessTestRoute(request) {
+  return isAuthenticated(request);
 }
 
 export async function POST(request) {
   try {
-    if (!(await canAccessTestRoute())) {
+    if (!(await canAccessTestRoute(request))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

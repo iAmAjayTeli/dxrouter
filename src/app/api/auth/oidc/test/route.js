@@ -1,21 +1,20 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { getSettings } from "@/lib/localDb";
 import { fetchOidcDiscovery, getPublicOrigin, probeOidcClientSecret } from "@/lib/auth/oidc";
-import { verifyDashboardAuthToken } from "@/lib/auth/dashboardSession";
+import { isAuthenticated } from "@/dashboardGuard";
 
-async function canAccessTestRoute() {
-  const settings = await getSettings();
-  if (settings.requireLogin === false) return true;
-
-  const cookieStore = await cookies();
-  const token = cookieStore.get("auth_token")?.value;
-  return await verifyDashboardAuthToken(token);
+// /api/auth/oidc/* is public in the guard (start and callback must be), so this route
+// authenticates itself — with the guard's rules, not a looser copy of them. The copy
+// honoured requireLogin=false from ANY peer and skipped the cross-site check, and this
+// route sends the stored client secret to the token_endpoint named by whatever issuer
+// the caller supplies: with login disabled, a remote caller could collect the secret.
+async function canAccessTestRoute(request) {
+  return isAuthenticated(request);
 }
 
 export async function POST(request) {
   try {
-    if (!(await canAccessTestRoute())) {
+    if (!(await canAccessTestRoute(request))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

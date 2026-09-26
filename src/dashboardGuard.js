@@ -13,7 +13,7 @@ async function getCliToken() {
   return cachedCliToken;
 }
 
-async function hasValidCliToken(request) {
+export async function hasValidCliToken(request) {
   const token = request.headers.get(CLI_TOKEN_HEADER);
   if (!token) return false;
   return token === await getCliToken();
@@ -83,6 +83,9 @@ const LOCAL_ONLY_PATHS = [
   "/api/auth/reset-password",
   "/api/headroom/start",
   "/api/headroom/stop",
+  // Kills and respawns the same Python proxy start/stop manage; it was the one sibling
+  // left session-only, so a tunnel session could restart it while start/stop refused.
+  "/api/headroom/restart",
   "/api/headroom/proxy",
   // Terminates this installation's processes and then exits the server. It belongs here
   // by the rule above — it is the most process-destructive route in the app — and it was
@@ -222,7 +225,7 @@ async function loadSettings() {
 // only. Upstream applied it to every peer, so one settings write turned a
 // network-exposed dashboard into an open one — including the routes that manage
 // credentials. Disabling login is a local-convenience switch, not a remote one.
-async function isAuthenticated(request) {
+export async function isAuthenticated(request) {
   if (await hasValidToken(request)) return true;
   const settings = await loadSettings();
   if (settings && settings.requireLogin === false && isLocalRequest(request) && !isFromAnotherSite(request)) return true;

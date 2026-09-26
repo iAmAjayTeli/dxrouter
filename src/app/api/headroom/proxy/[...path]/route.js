@@ -18,6 +18,14 @@ const HOP_BY_HOP_HEADERS = new Set([
 const DASHBOARD_PREFIX = "/api/headroom/proxy";
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
+// DXRouter's own trust headers never leave DXRouter. This route is LOCAL_ONLY, so a
+// caller here typically carries x-9r-cli-token (host-local authority from any peer),
+// and custom-server.js stamps x-9r-peer-token / x-9r-real-ip / x-9r-via-proxy on every
+// request. Forwarding them handed the CLI token to whatever headroomUrl is configured.
+const DXR_INTERNAL_HEADERS = ["x-9r-cli-token", "x-9r-peer-token", "x-9r-real-ip", "x-9r-via-proxy"];
+// Credentials a non-loopback Headroom host has no business receiving.
+const VIEWER_CREDENTIAL_HEADERS = ["cookie", "authorization", "x-api-key", "x-goog-api-key"];
+
 async function getTargetBase() {
   const settings = await getSettings();
   const url = settings.headroomUrl || DEFAULT_HEADROOM_URL;
@@ -41,10 +49,10 @@ function forwardedHeaders(request, target) {
     if (HOP_BY_HOP_HEADERS.has(header.toLowerCase())) headers.delete(header);
   }
   headers.delete("host");
+  for (const header of DXR_INTERNAL_HEADERS) headers.delete(header);
   // Never leak viewer credentials to a non-loopback Headroom host
   if (!LOOPBACK_HOSTS.has(target.hostname.replace(/^\[|\]$/g, "").toLowerCase())) {
-    headers.delete("cookie");
-    headers.delete("authorization");
+    for (const header of VIEWER_CREDENTIAL_HEADERS) headers.delete(header);
   }
   return headers;
 }
