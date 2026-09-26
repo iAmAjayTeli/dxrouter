@@ -21,6 +21,7 @@ function ipv4ToInt(host) {
 const BLOCKED_V4_RANGES = [
   [ipv4ToInt("0.0.0.0"), 8],
   [ipv4ToInt("10.0.0.0"), 8],
+  [ipv4ToInt("100.64.0.0"), 10], // CGNAT; also Alibaba Cloud metadata (100.100.100.200)
   [ipv4ToInt("127.0.0.0"), 8],
   [ipv4ToInt("169.254.0.0"), 16],
   [ipv4ToInt("172.16.0.0"), 12],
@@ -40,8 +41,17 @@ function isBlockedIpv6(host) {
   const h = host.replace(/^\[|\]$/g, "").toLowerCase();
   const v4Mapped = h.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
   if (v4Mapped) return isBlockedIpv4(v4Mapped[1]);
+  // WHATWG URL serialises IPv4-mapped addresses in hex ([::ffff:127.0.0.1] ->
+  // [::ffff:7f00:1]), so the dotted form above never matches a parsed hostname.
+  const v4MappedHex = h.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (v4MappedHex) {
+    const hi = parseInt(v4MappedHex[1], 16);
+    const lo = parseInt(v4MappedHex[2], 16);
+    return isBlockedIpv4(`${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`);
+  }
   if (h === "::1" || h === "::") return true;
-  return h.startsWith("fe80:") || h.startsWith("fc") || h.startsWith("fd");
+  // fc00::/7 unique-local, fe80::/10 link-local (fe80:: through febf::)
+  return /^fe[89ab]/.test(h) || h.startsWith("fc") || h.startsWith("fd");
 }
 
 // Throw if URL targets a non-public host. Caller should map to 400.

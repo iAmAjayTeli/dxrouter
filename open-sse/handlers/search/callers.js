@@ -68,14 +68,22 @@ export function getProviderSetting(params, key) {
  *
  * The override is client-controlled and therefore SSRF-hardened: only public
  * http(s) URLs are accepted (internal/private/loopback/metadata addresses are
- * rejected via assertPublicUrl). The provider's own configured baseUrl is
- * trusted as-is (admin-controlled).
+ * rejected via assertPublicUrl), and only for providers that send no credential.
+ * The provider's own configured baseUrl is trusted as-is (admin-controlled).
  *
  * @param {SearchProviderConfig} config
  * @param {SearchRequestParams} params
  * @returns {string}
  */
 export function resolveBaseUrl(config, params) {
+  // A client-chosen host must never receive the stored credential: the request
+  // builders attach params.token to whatever URL this returns, so an override on
+  // an authenticated provider hands the admin's upstream API key to any caller
+  // holding a router key. Keyless providers (e.g. SearXNG) keep the override.
+  const clientOverride = params.providerOptions?.baseUrl;
+  if (params.token && typeof clientOverride === "string" && clientOverride.trim()) {
+    throw new Error("provider_options.baseUrl is not allowed for a provider that sends credentials");
+  }
   const override = getProviderSetting(params, "baseUrl");
   if (override) {
     // SSRF guard: client-supplied base URLs must be public http(s) only.
