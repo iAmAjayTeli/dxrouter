@@ -9,6 +9,7 @@
     "test:watch": "vitest --reporter=verbose",
     "test:m0": "vitest run security/ continuity/ protocol/",
     "test:security": "vitest run security/",
+    "test:dxr": "vitest run unit/dxr-",
     "test:m1": "vitest run continuity/ protocol/m1-no-routing-change.test.js",
     "test:m2": "vitest run continuity/ protocol/m2-no-routing-change.test.js"
   },

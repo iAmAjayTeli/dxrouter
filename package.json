@@ -19,6 +19,7 @@
     "lint:boundary": "node scripts/check-import-boundary.mjs --root continuity",
     "test:m0": "npm --prefix tests run test:m0",
     "test:security": "npm --prefix tests run test:security",
+    "test:dxr": "npm --prefix tests run test:dxr",
     "test:m1": "npm --prefix tests run test:m1",
     "test:m2": "npm --prefix tests run test:m2",
     "dxrouter": "node scripts/dxrouter.mjs"

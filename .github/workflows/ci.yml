@@ -54,6 +54,11 @@ jobs:
           # Deterministic key so credential-at-rest assertions do not depend on a
           # keychain the runner does not have.
           DXR_MASTER_KEY: "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+      # DXRouter identity invariants (updater/process ownership, Docker, ports, docs,
+      # workflow publish targets). Each pins a shipped milestone; they live under
+      # tests/unit/ beside the inherited suite, which is not gated, so without this
+      # step nothing in CI would notice them regress.
+      - run: npm run test:dxr
 
   lint:
     name: eslint
