@@ -142,6 +142,20 @@ function isPublicLlmApi(pathname) {
   return PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
+// Fetch Metadata. Browsers label every request with where it came from, and the three
+// kinds of ambient authority below (the SameSite=Lax session cookie, requireLogin=false,
+// requireApiKey=false) are exactly what another site can borrow: Lax still sends the
+// cookie on a cross-site top-level GET, and every other port on this host is
+// "same-site", so a page the operator merely visits could start OAuth listeners, spawn
+// MCP children or rotate stored tokens through GET routes. isLocalRequest() does not
+// help: a navigation carries no Origin. "same-origin" (the dashboard itself) and "none"
+// (typed URL, bookmark) pass; non-browser clients send no Sec-Fetch-* and pass.
+// Explicit credentials (API key, CLI token) are not ambient and are not affected.
+function isFromAnotherSite(request) {
+  const site = request.headers.get("sec-fetch-site");
+  return site === "cross-site" || site === "same-site";
+}
+
 function extractApiKey(request) {
   const authHeader = request.headers.get("Authorization");
   if (authHeader?.startsWith("Bearer ")) return authHeader.slice(7);
@@ -171,7 +185,7 @@ async function canAccessPublicLlmApi(request) {
   if (await hasValidApiKey(request)) return true;
 
   const settings = await loadSettings();
-  if (settings && settings.requireApiKey === false && isLocalRequest(request)) return true;
+  if (settings && settings.requireApiKey === false && isLocalRequest(request) && !isFromAnotherSite(request)) return true;
 
   return false;
 }
@@ -184,6 +198,7 @@ async function canAccessLocalOnlyRoute(request) {
 }
 
 async function hasValidToken(request) {
+  if (isFromAnotherSite(request)) return false; // the cookie is ambient; see isFromAnotherSite
   const token = request.cookies.get("auth_token")?.value;
   return await verifyDashboardAuthToken(token);
 }
@@ -204,7 +219,7 @@ async function loadSettings() {
 async function isAuthenticated(request) {
   if (await hasValidToken(request)) return true;
   const settings = await loadSettings();
-  if (settings && settings.requireLogin === false && isLocalRequest(request)) return true;
+  if (settings && settings.requireLogin === false && isLocalRequest(request) && !isFromAnotherSite(request)) return true;
   return false;
 }
 
