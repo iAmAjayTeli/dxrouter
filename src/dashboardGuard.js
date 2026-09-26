@@ -190,11 +190,17 @@ async function canAccessPublicLlmApi(request) {
   return false;
 }
 
-async function canAccessLocalOnlyRoute(request) {
+export async function canAccessLocalOnlyRoute(request) {
   if (await hasValidCliToken(request)) return true;
   // Browser on host: loopback Host + Origin (blocks tunnel/CSRF) + auth (JWT or requireLogin=false)
   if (isLocalRequest(request) && await isAuthenticated(request)) return true;
   return false;
+}
+
+/** Whether `pathname` is one of the LOCAL_ONLY routes. For handlers that aggregate other
+ * routes' output (all-statuses), so the policy stays in this one list. */
+export function isLocalOnlyPath(pathname) {
+  return LOCAL_ONLY_PATHS.some((p) => pathname.startsWith(p));
 }
 
 async function hasValidToken(request) {
@@ -241,7 +247,7 @@ export async function proxy(request) {
   const { pathname } = request.nextUrl;
 
   // Local-only gate for spawn-capable / host-secret routes.
-  if (LOCAL_ONLY_PATHS.some((p) => pathname.startsWith(p))) {
+  if (isLocalOnlyPath(pathname)) {
     if (!(await canAccessLocalOnlyRoute(request))) {
       return NextResponse.json({ error: "Local only: CLI token required" }, { status: 403 });
     }

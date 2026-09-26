@@ -1,6 +1,7 @@
 "use server";
 
 import { NextResponse } from "next/server";
+import { canAccessLocalOnlyRoute, isLocalOnlyPath } from "@/dashboardGuard";
 import { GET as claudeGet } from "../claude-settings/route";
 import { GET as codexGet } from "../codex-settings/route";
 import { GET as opencodeGet } from "../opencode-settings/route";
@@ -33,10 +34,19 @@ const STATUS_GETTERS = {
   devin: devinGet,
 };
 
-// Batch endpoint: gather all CLI tool statuses in one round-trip
-export async function GET() {
+// Batch endpoint: gather all CLI tool statuses in one round-trip.
+//
+// This handler calls each tool's GET directly, so the per-route gate in dashboardGuard
+// never runs for them. cowork-settings is LOCAL_ONLY there, and for cause: the config it
+// returns carries the x-9r-cli-token it injects into its MCP bridge entries, and that
+// token is host-local authority from any peer. So a tool whose own route is LOCAL_ONLY is
+// only aggregated for a caller that route would admit; others get null, which the page
+// already renders as "status unavailable".
+export async function GET(request) {
+  const localAllowed = await canAccessLocalOnlyRoute(request);
   const entries = await Promise.all(
     Object.entries(STATUS_GETTERS).map(async ([toolId, getter]) => {
+      if (!localAllowed && isLocalOnlyPath(`/api/cli-tools/${toolId}-settings`)) return [toolId, null];
       try {
         const res = await getter();
         const data = await res.json();
