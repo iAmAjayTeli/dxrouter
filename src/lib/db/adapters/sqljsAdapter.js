@@ -4,6 +4,9 @@ import { PRAGMA_SQL } from "../schema.js";
 
 let SQL = null;
 
+// Every process event the adapter flushes on. `exit` is the one emitted by process.exit().
+const SHUTDOWN_EVENTS = ["beforeExit", "exit", "SIGINT", "SIGTERM"];
+
 async function loadSql() {
   if (SQL) return SQL;
   SQL = await initSqlJs();
@@ -101,15 +104,29 @@ export async function createSqlJsAdapter(filePath) {
 
   function close() {
     if (saveTimer) clearTimeout(saveTimer);
-    if (dirty) persist();
-    db.close();
+    saveTimer = null;
+    try {
+      if (dirty) persist();
+    } finally {
+      // Always release the handle and the process listeners, even when the final write
+      // fails, so a closed adapter is neither leaked nor flushed again at exit.
+      for (const event of SHUTDOWN_EVENTS) process.off(event, flush);
+      db.close();
+    }
   }
 
-  // Flush on shutdown
+  // Flush on shutdown.
+  //
+  // Writes sit in memory for up to SAVE_DEBOUNCE_MS before they reach disk, so every way
+  // the process can end has to flush first. `exit` is the one that matters most: it is
+  // the only event emitted when anything calls `process.exit()` — which the other
+  // drivers' signal handlers, the app's cleanup handler and the shutdown routes all do —
+  // and it runs synchronously, which `writeFileSync` is. Without it, committed rows were
+  // silently discarded on every `process.exit()` inside the debounce window.
+  //
+  // The signal listeners are kept for their existing behaviour and are not changed here.
   const flush = () => { if (dirty) try { persist(); } catch {} };
-  process.on("beforeExit", flush);
-  process.on("SIGINT", flush);
-  process.on("SIGTERM", flush);
+  for (const event of SHUTDOWN_EVENTS) process.on(event, flush);
 
   return { driver: "sql.js", run, get, all, exec, transaction, close, raw: db };
 }
