@@ -64,7 +64,9 @@ describe("custom-server peer header sanitizing", () => {
     const headers = await get({ "x-forwarded-for": "203.0.113.9, 10.0.0.1" });
 
     expect(headers["x-9r-via-proxy"]).toBe("1");
-    expect(headers["x-9r-real-ip"]).toBe("203.0.113.9");
+    // Rightmost: the entry the proxy appended. The leftmost is whatever the client sent
+    // (see tests/security/login-lockout-forwarded-ip.test.js).
+    expect(headers["x-9r-real-ip"]).toBe("10.0.0.1");
     expect(headers["x-forwarded-for"]).toBeUndefined();
   });
 

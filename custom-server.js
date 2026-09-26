@@ -61,7 +61,13 @@ http.createServer = (...args) => {
     const isLoopbackProxy = socketIp === "127.0.0.1" || socketIp === "::1" || socketIp === "::ffff:127.0.0.1";
     // Trust forwarding headers only when the TCP peer is a local reverse proxy.
     // Direct/public sockets remain keyed by the unspoofable peer address.
-    const proxyIp = xRealIp || (xff ? String(xff).split(",")[0].trim() : "");
+    // Take the RIGHTMOST X-Forwarded-For entry: it is the one the trusted proxy
+    // appended. Everything left of it, and an X-Real-IP the proxy did not overwrite,
+    // arrived from the client — Cloudflare (our own cloudflared tunnel), Caddy,
+    // Traefik and nginx's $proxy_add_x_forwarded_for all append — so preferring them
+    // let a client choose its own login-lockout bucket on every attempt.
+    const xffLast = xff ? String(xff).split(",").map((s) => s.trim()).filter(Boolean).pop() || "" : "";
+    const proxyIp = xffLast || (xRealIp ? String(xRealIp).trim() : "");
     const ip = isLoopbackProxy && proxyIp ? proxyIp : socketIp;
     delete req.headers["x-9r-real-ip"];
     delete req.headers["x-forwarded-for"];
