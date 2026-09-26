@@ -1,4 +1,4 @@
-import { getAdapter } from "../driver.js";
+import { getAdapter, getAdapterSync } from "../driver.js";
 import { parseJson, stringifyJson } from "../helpers/jsonCol.js";
 import { isSecretKey, redactSecrets } from "../../security/redact.js";
 
@@ -150,60 +150,65 @@ async function flushToDatabase() {
   if (writeBuffer.length === 0) return;
   isFlushing = true;
   try {
-    // Drain entire buffer (loop in case more pushed during await)
+    // Drain entire buffer (loop in case more pushed during await).
+    // Await first, splice second: items leave the buffer in the same tick they are
+    // written, so a shutdown landing mid-await still finds them for flushSync().
     while (writeBuffer.length > 0) {
-      const items = writeBuffer.splice(0, writeBuffer.length);
       const db = await getAdapter();
       const config = await getObservabilityConfig();
-
-      db.transaction(() => {
-        for (const raw of items) {
-          const item = config.persistBodies ? { ...raw } : stripBodies(raw);
-          if (!item.id) item.id = generateDetailId(item.model);
-          if (!item.timestamp) item.timestamp = new Date().toISOString();
-          if (item.request?.headers) item.request.headers = sanitizeHeaders(item.request.headers);
-
-          const record = {
-            id: item.id,
-            provider: item.provider || null,
-            model: item.model || null,
-            connectionId: item.connectionId || null,
-            timestamp: item.timestamp,
-            status: item.status || null,
-            latency: item.latency || {},
-            tokens: item.tokens || {},
-            request: truncateField(item.request, config.maxJsonSize),
-            providerRequest: truncateField(item.providerRequest, config.maxJsonSize),
-            providerResponse: truncateField(item.providerResponse, config.maxJsonSize),
-            response: truncateField(item.response, config.maxJsonSize),
-            pxpipe: item.pxpipe || undefined,
-          };
-
-          // Unconditional, whole-record redaction: secret-looking keys are dropped
-          // (see redact.js `drop`) and secret-shaped strings inside free text are
-          // scrubbed, wherever they sit in the tree. Nothing reaches SQLite unredacted.
-          const safeRecord = redactSecrets(record, { drop: true });
-
-          db.run(
-            `INSERT INTO requestDetails(id, timestamp, provider, model, connectionId, status, data) VALUES(?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET timestamp = excluded.timestamp, provider = excluded.provider, model = excluded.model, connectionId = excluded.connectionId, status = excluded.status, data = excluded.data`,
-            [record.id, record.timestamp, record.provider, record.model, record.connectionId, record.status, stringifyJson(safeRecord)]
-          );
-        }
-
-        const cnt = db.get(`SELECT COUNT(*) as c FROM requestDetails`);
-        if (cnt && cnt.c > config.maxRecords) {
-          db.run(
-            `DELETE FROM requestDetails WHERE id IN (SELECT id FROM requestDetails ORDER BY timestamp ASC LIMIT ?)`,
-            [cnt.c - config.maxRecords]
-          );
-        }
-      });
+      writeBatch(db, config, writeBuffer.splice(0, writeBuffer.length));
     }
   } catch (e) {
     console.error("[requestDetailsRepo] Batch write failed:", e);
   } finally {
     isFlushing = false;
   }
+}
+
+/** Synchronous: one transaction for the whole batch, then trim to maxRecords. */
+function writeBatch(db, config, items) {
+  db.transaction(() => {
+    for (const raw of items) {
+      const item = config.persistBodies ? { ...raw } : stripBodies(raw);
+      if (!item.id) item.id = generateDetailId(item.model);
+      if (!item.timestamp) item.timestamp = new Date().toISOString();
+      if (item.request?.headers) item.request.headers = sanitizeHeaders(item.request.headers);
+
+      const record = {
+        id: item.id,
+        provider: item.provider || null,
+        model: item.model || null,
+        connectionId: item.connectionId || null,
+        timestamp: item.timestamp,
+        status: item.status || null,
+        latency: item.latency || {},
+        tokens: item.tokens || {},
+        request: truncateField(item.request, config.maxJsonSize),
+        providerRequest: truncateField(item.providerRequest, config.maxJsonSize),
+        providerResponse: truncateField(item.providerResponse, config.maxJsonSize),
+        response: truncateField(item.response, config.maxJsonSize),
+        pxpipe: item.pxpipe || undefined,
+      };
+
+      // Unconditional, whole-record redaction: secret-looking keys are dropped
+      // (see redact.js `drop`) and secret-shaped strings inside free text are
+      // scrubbed, wherever they sit in the tree. Nothing reaches SQLite unredacted.
+      const safeRecord = redactSecrets(record, { drop: true });
+
+      db.run(
+        `INSERT INTO requestDetails(id, timestamp, provider, model, connectionId, status, data) VALUES(?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET timestamp = excluded.timestamp, provider = excluded.provider, model = excluded.model, connectionId = excluded.connectionId, status = excluded.status, data = excluded.data`,
+        [record.id, record.timestamp, record.provider, record.model, record.connectionId, record.status, stringifyJson(safeRecord)]
+      );
+    }
+
+    const cnt = db.get(`SELECT COUNT(*) as c FROM requestDetails`);
+    if (cnt && cnt.c > config.maxRecords) {
+      db.run(
+        `DELETE FROM requestDetails WHERE id IN (SELECT id FROM requestDetails ORDER BY timestamp ASC LIMIT ?)`,
+        [cnt.c - config.maxRecords]
+      );
+    }
+  });
 }
 
 export async function saveRequestDetail(detail) {
@@ -270,21 +275,36 @@ export async function getRequestDetailById(id) {
   return row ? parseJson(row.data, null) : null;
 }
 
-const _shutdownHandler = async () => {
+/**
+ * Shutdown flush. Must be synchronous: SIGINT/SIGTERM listeners in the DB
+ * adapters call process.exit() in the same emit, and "exit" listeners cannot
+ * await, so an async flush here never reached the database (buffered rows were
+ * lost on every Ctrl+C, `docker stop`, or process.exit()).
+ */
+function flushSync() {
   if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
-  if (writeBuffer.length > 0) await flushToDatabase();
-};
+  if (writeBuffer.length === 0 || !cachedConfig) return;
+  let db;
+  try { db = getAdapterSync(); } catch { return; } // never opened: nothing to write into
+  try {
+    writeBatch(db, cachedConfig, writeBuffer.splice(0, writeBuffer.length));
+  } catch (e) {
+    console.error("[requestDetailsRepo] Shutdown flush failed:", e);
+  }
+}
 
+const SHUTDOWN_EVENTS = ["beforeExit", "SIGINT", "SIGTERM", "exit"];
+
+// The handler lives on `global` so a module re-evaluation (Next.js dev HMR, test
+// resetModules) replaces the previous one instead of stacking another listener.
+// Prepended so it runs before the adapters' SIGINT/SIGTERM handlers close the DB.
 function ensureShutdownHandler() {
-  process.off("beforeExit", _shutdownHandler);
-  process.off("SIGINT", _shutdownHandler);
-  process.off("SIGTERM", _shutdownHandler);
-  process.off("exit", _shutdownHandler);
-
-  process.on("beforeExit", _shutdownHandler);
-  process.on("SIGINT", _shutdownHandler);
-  process.on("SIGTERM", _shutdownHandler);
-  process.on("exit", _shutdownHandler);
+  const previous = global._dxrRequestDetailsShutdown;
+  for (const ev of SHUTDOWN_EVENTS) {
+    if (previous) process.off(ev, previous);
+    process.prependListener(ev, flushSync);
+  }
+  global._dxrRequestDetailsShutdown = flushSync;
 }
 
 ensureShutdownHandler();
