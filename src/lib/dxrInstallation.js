@@ -343,6 +343,11 @@ function listProcesses() {
     .filter((row) => row && Number.isInteger(row.pid) && row.pid > 0);
 }
 
+// Number("") is 0, and lsof ends its output with a newline, so every POSIX lookup used
+// to report PID 0 as a listener. PID 0 is never a listener, and handed to kill(2) it
+// means "my whole process group". Callers filtering it is not a contract.
+const isRealPid = (pid) => Number.isInteger(pid) && pid > 0;
+
 /** PIDs with a listener on `port`, on loopback or otherwise. Port-compared, not
  * substring-matched, so `:20127` never matches `:201270`. */
 export function pidsListeningOnPort(port) {
@@ -369,7 +374,7 @@ export function pidsListeningOnPort(port) {
       if (state !== "LISTENING") continue;
       const localPort = Number(local.slice(local.lastIndexOf(":") + 1));
       if (localPort !== wanted) continue;
-      if (Number.isInteger(Number(pid))) found.add(Number(pid));
+      if (isRealPid(Number(pid))) found.add(Number(pid));
     }
     return [...found];
   }
@@ -382,7 +387,7 @@ export function pidsListeningOnPort(port) {
     });
     for (const line of String(raw).split("\n")) {
       const pid = Number(line.trim());
-      if (Number.isInteger(pid)) found.add(pid);
+      if (isRealPid(pid)) found.add(pid);
     }
   } catch {
     // lsof absent or nothing listening.
