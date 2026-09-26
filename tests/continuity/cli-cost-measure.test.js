@@ -317,7 +317,13 @@ describe("§13 `cost` and `measure` as a process", () => {
       cwd: ROOT,
       encoding: "utf8",
       env: { ...process.env, DXR_DATA_DIR: dataDir },
+      // spawnSync blocks the worker, so vitest's testTimeout cannot interrupt a hung
+      // child; this bound is the only one. A spawn failure or a kill must surface as
+      // itself, not as `expected null to be 0` on the status assertion.
+      timeout: 30_000,
     });
+    if (out.error) throw new Error(`dxrouter ${args.join(" ")}: ${out.error.message}\n${out.stderr ?? ""}`);
+    if (out.signal) throw new Error(`dxrouter ${args.join(" ")}: killed by ${out.signal}\n${out.stderr ?? ""}`);
     return { status: out.status, stdout: out.stdout ?? "", stderr: out.stderr ?? "" };
   }
 

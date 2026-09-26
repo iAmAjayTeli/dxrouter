@@ -226,6 +226,7 @@ describe("the hash is on disk, readable by a separate process", () => {
     const stored = execFileSync(process.execPath, [reader, path.join(DIR, "db", "data.sqlite")], {
       cwd: REPO_ROOT,
       encoding: "utf8",
+      timeout: 30_000, // a sync spawn blocks the worker; testTimeout cannot interrupt it
     });
 
     expect(stored).toMatch(/^\$2[aby]\$/);

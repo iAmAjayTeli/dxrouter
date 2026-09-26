@@ -22,9 +22,11 @@ const FIXTURES = path.join(REPO_ROOT, "tests", "fixtures", "boundary");
 
 function runChecker(root) {
   try {
-    const stdout = execFileSync(process.execPath, [SCRIPT, "--root", root], { encoding: "utf8" });
+    // Bounded: a sync spawn blocks the worker, so testTimeout cannot interrupt it.
+    const stdout = execFileSync(process.execPath, [SCRIPT, "--root", root], { encoding: "utf8", timeout: 30_000 });
     return { code: 0, output: stdout };
   } catch (e) {
+    if (e.status === null) throw e; // never ran, or killed (timeout): not a checker verdict
     return { code: e.status, output: `${e.stdout || ""}${e.stderr || ""}` };
   }
 }

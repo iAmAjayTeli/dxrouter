@@ -293,6 +293,7 @@ describe("§13 the CLI as a process", () => {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
       env: { ...process.env, DXR_DATA_DIR: dataDir },
+      timeout: 30_000, // a sync spawn blocks the worker; testTimeout cannot interrupt it
     });
   }
 

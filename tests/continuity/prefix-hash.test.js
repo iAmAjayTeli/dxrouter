@@ -60,6 +60,7 @@ describe("layer hashes are digests of the canonical form", () => {
     const out = execFileSync(process.execPath, ["--input-type=module", "-e", script], {
       cwd: REPO_ROOT,
       encoding: "utf8",
+      timeout: 30_000, // a sync spawn blocks the worker; testTimeout cannot interrupt it
     });
     const local = computePrefixLayers({
       tools: [{ name: "read" }],

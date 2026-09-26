@@ -16,6 +16,7 @@ jobs:
   boundary:
     name: I1 import boundary
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,6 +29,10 @@ jobs:
   m0-tests:
     name: M0 tests (security, continuity, protocol)
     runs-on: ubuntu-latest
+    # Several tests spawn a child synchronously; a child that hangs blocks the
+    # vitest worker, so testTimeout never fires. Bound the job instead of
+    # inheriting GitHub's 360-minute default.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -48,6 +53,7 @@ jobs:
   lint:
     name: eslint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
