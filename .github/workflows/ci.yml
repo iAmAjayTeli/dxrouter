@@ -117,10 +117,23 @@ jobs:
         env:
           NEXT_TELEMETRY_DISABLED: "1"
       # The browser-facing bundles must not carry a Google Analytics / Tag Manager loader,
-      # collection endpoint or the upstream property id (removed in 4b58f378).
+      # collection endpoint or the upstream property id (removed in 4b58f378). A missing
+      # or empty .next/static, or a grep error (exit 2), must fail rather than read as
+      # "no matches" (exit 1).
       - name: no third-party analytics in the client bundles
         run: |
-          if grep -rEl 'googletagmanager\.com|google-analytics\.com|G-LC959F603F' .next/static; then
+          count=$(find .next/static -type f -name '*.js' 2>/dev/null | wc -l)
+          echo "scanning $count client JS files under .next/static"
+          if [ "$count" -eq 0 ]; then
+            echo "::error::no client bundles under .next/static; nothing was scanned"
+            exit 1
+          fi
+          rc=0
+          grep -rEl 'googletagmanager\.com|google-analytics\.com|G-LC959F603F' .next/static || rc=$?
+          if [ "$rc" -eq 0 ]; then
             echo "::error::analytics reference found in .next/static (files listed above)"
+            exit 1
+          elif [ "$rc" -ne 1 ]; then
+            echo "::error::grep failed with exit $rc; the scan did not run"
             exit 1
           fi
