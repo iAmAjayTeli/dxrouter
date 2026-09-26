@@ -253,31 +253,15 @@ export async function saveRequestUsage(entry) {
 
     // All 3 writes (history insert, daily upsert, lifetime counter) in ONE transaction.
     // better-sqlite3 is sync → no JS yield mid-transaction → no race in same process.
+    //
+    // Every call is one request. There used to be a lookup here that skipped the insert
+    // when a row with the same millisecond timestamp, provider, model, connection, key and
+    // token counts already existed. It was added (0d216689) to absorb a second write that
+    // logUsage() made for every stream, and that write was removed at its source 41s later
+    // (ec096d2a) — leaving a filter that silently discarded genuinely separate requests
+    // finishing in the same millisecond with the same token counts: 100 concurrent
+    // identical requests were recorded as 2 or 3, undercounting usage and cost.
     db.transaction(() => {
-      const existing = db.get(
-        `SELECT id, endpoint FROM usageHistory
-         WHERE timestamp = ?
-           AND COALESCE(provider, '') = COALESCE(?, '')
-           AND COALESCE(model, '') = COALESCE(?, '')
-           AND COALESCE(connectionId, '') = COALESCE(?, '')
-           AND COALESCE(apiKey, '') = COALESCE(?, '')
-           AND promptTokens = ?
-           AND completionTokens = ?
-         ORDER BY id DESC LIMIT 1`,
-        [
-          entry.timestamp, entry.provider || null, entry.model || null,
-          entry.connectionId || null, entry.apiKey || null,
-          promptTokens, completionTokens,
-        ]
-      );
-
-      if (existing) {
-        if (!existing.endpoint && entry.endpoint) {
-          db.run(`UPDATE usageHistory SET endpoint = ? WHERE id = ?`, [entry.endpoint, existing.id]);
-        }
-        return;
-      }
-
       db.run(
         `INSERT INTO usageHistory(timestamp, provider, model, connectionId, apiKey, endpoint, promptTokens, completionTokens, cost, status, tokens, meta) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
