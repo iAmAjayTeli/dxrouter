@@ -94,7 +94,19 @@ const LOCAL_ONLY_PATHS = [
   // Everything this route can do is a local-maintenance action, so a local peer is a
   // precondition rather than a restriction.
   "/api/version/shutdown",
+  // Host-control policy: these run `npm install` into the data dir and load the package
+  // into the server process. status/stats/health/logs/stop stay session-level.
+  "/api/pxpipe/install",
+  "/api/pxpipe/start",
+  "/api/pxpipe/restart",
 ];
+
+// Host-control policy: every /api/cli-tools/<tool>-settings route reads and rewrites
+// another tool's configuration on the HOST (~/.claude/settings.json env and base URL,
+// ~/.codex/config.toml, VS Code model files, ...) and its GET returns those files,
+// credentials included. A pattern rather than a list so a new tool cannot ship
+// session-level by omission. cowork-settings (above) already matched by prefix.
+const LOCAL_ONLY_PATTERNS = [/^\/api\/cli-tools\/[a-z0-9-]+-settings(\/|$)/];
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
@@ -203,7 +215,7 @@ export async function canAccessLocalOnlyRoute(request) {
 /** Whether `pathname` is one of the LOCAL_ONLY routes. For handlers that aggregate other
  * routes' output (all-statuses), so the policy stays in this one list. */
 export function isLocalOnlyPath(pathname) {
-  return LOCAL_ONLY_PATHS.some((p) => pathname.startsWith(p));
+  return LOCAL_ONLY_PATHS.some((p) => pathname.startsWith(p)) || LOCAL_ONLY_PATTERNS.some((re) => re.test(pathname));
 }
 
 async function hasValidToken(request) {

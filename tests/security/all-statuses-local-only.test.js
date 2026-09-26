@@ -36,8 +36,14 @@ vi.mock("@/shared/utils/machineId", () => ({ getConsistentMachineId: mocks.getCo
 vi.mock("@/lib/auth/dashboardSession", () => ({ verifyDashboardAuthToken: mocks.verifyDashboardAuthToken }));
 
 // Every per-tool GET is replaced: the test is about which ones all-statuses calls, and
-// the real ones read the machine's actual CLI configs.
-const stub = (id) => async () => ({ json: async () => ({ tool: id }) });
+// the real ones read the machine's actual CLI configs. Each stub carries a secret, the
+// way the real claude/codex GETs return env.ANTHROPIC_AUTH_TOKEN or bearer headers.
+const TOOL_SECRET = "sk-host-config-secret";
+const called = new Set();
+const stub = (id) => async () => {
+  called.add(id);
+  return { json: async () => ({ tool: id, settings: { env: { ANTHROPIC_AUTH_TOKEN: TOOL_SECRET } } }) };
+};
 const TOOLS = ["claude", "codex", "opencode", "droid", "openclaw", "hermes", "copilot", "cline", "kilo", "deepseek-tui", "jcode", "grok-build", "devin"];
 for (const id of TOOLS) {
   vi.doMock(`../../src/app/api/cli-tools/${id}-settings/route`, () => ({ GET: stub(id) }));
@@ -79,8 +85,23 @@ describe("all-statuses honours the LOCAL_ONLY gate of the routes it aggregates",
     expect(mocks.coworkGet).not.toHaveBeenCalled();
     expect(body.cowork).toBeNull();
     expect(JSON.stringify(body)).not.toContain(CLI_TOKEN);
-    // Everything else is still served: the fix is scoped to what is local-only.
-    for (const id of TOOLS) expect(body[id]).toEqual({ tool: id });
+  });
+
+  // Policy decision 1: every *-settings route is LOCAL_ONLY, so a remote session gets
+  // no tool's host configuration through the aggregate either — none of the per-tool
+  // GETs even runs, and no host-config secret appears in the body.
+  it("a remote session gets null for every tool, runs no per-tool GET, sees no secret", async () => {
+    called.clear();
+    const body = await (await GET(request({ peer: "203.0.113.7" }))).json();
+
+    for (const id of TOOLS) expect(body[id], id).toBeNull();
+    expect([...called]).toEqual([]);
+    expect(JSON.stringify(body)).not.toContain(TOOL_SECRET);
+  });
+
+  it("a local session still gets every tool", async () => {
+    const body = await (await GET(request())).json();
+    for (const id of TOOLS) expect(body[id]?.tool, id).toBe(id);
   });
 
   it("a local session still gets cowork status", async () => {
