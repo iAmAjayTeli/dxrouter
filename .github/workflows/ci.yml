@@ -94,3 +94,33 @@ jobs:
       - name: eslint (whole repo, advisory)
         continue-on-error: true
         run: npx eslint .
+
+
+  build:
+    name: production build (next build)
+    runs-on: ubuntu-latest
+    # Nothing else in CI builds the app, yet this build is what docker-publish.yml ships
+    # and what an operator runs. Locally (Windows, 16 GB, Node 22 and 24) it sat in the
+    # webpack compile stage for ~25 minutes and died with "JavaScript heap out of
+    # memory" at the default ~4 GB heap. This job establishes whether that reproduces on
+    # a clean Linux runner. The heap is deliberately left at Node's default: raising it
+    # here would hide the problem this job exists to expose.
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+      # The browser-facing bundles must not carry a Google Analytics / Tag Manager loader,
+      # collection endpoint or the upstream property id (removed in 4b58f378).
+      - name: no third-party analytics in the client bundles
+        run: |
+          if grep -rEl 'googletagmanager\.com|google-analytics\.com|G-LC959F603F' .next/static; then
+            echo "::error::analytics reference found in .next/static (files listed above)"
+            exit 1
+          fi
