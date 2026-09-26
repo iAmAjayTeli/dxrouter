@@ -7,7 +7,7 @@
  * survived DDL.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -28,13 +28,32 @@ import { openContinuityStore } from "../../continuity/store/index.js";
 import { MIGRATIONS, assertMigrationsWellFormed, latestVersion } from "../../continuity/store/sqlite/migrations/index.js";
 
 let tmpDir;
+// Every adapter a test opens. sql.js writes on a 100ms debounce, so an adapter left open
+// still has a save armed when afterAll deletes the directory; the timer then fired into
+// the deleted path and logged "[sqljs] save failed: ENOENT" for all twelve of them on every
+// run. Closing them first flushes those writes while the directory still exists.
+const opened = [];
 
 async function freshDb(name) {
-  return createSqlJsAdapter(path.join(tmpDir, `${name}.sqlite`));
+  const db = await createSqlJsAdapter(path.join(tmpDir, `${name}.sqlite`));
+  opened.push(db);
+  return db;
 }
 
 beforeAll(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dxr-continuity-"));
+});
+
+// Per test, not per file: every test opens its own database, and holding all of them
+// open until afterAll kept twelve adapters (and their process listeners) alive at once.
+afterEach(() => {
+  for (const db of opened.splice(0)) {
+    try {
+      db.close();
+    } catch {
+      /* a test may have closed it already */
+    }
+  }
 });
 
 afterAll(() => {
