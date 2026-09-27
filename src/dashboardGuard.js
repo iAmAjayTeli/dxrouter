@@ -112,6 +112,14 @@ const LOCAL_ONLY_PATHS = [
 // session-level by omission. cowork-settings (above) already matched by prefix.
 const LOCAL_ONLY_PATTERNS = [/^\/api\/cli-tools\/[a-z0-9-]+-settings(\/|$)/];
 
+// Method-scoped entries of the same LOCAL_ONLY policy, for routes whose reads are
+// harmless but whose writes control the host. Same gate, same refusal.
+const LOCAL_ONLY_METHODS = [
+  // pip install / uninstall of headroom-ai extras into the host Python. GET (status and
+  // the ?log=1 install-log tail the UI polls) stays session-level.
+  { path: "/api/headroom/extras", methods: ["POST", "DELETE"] },
+];
+
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
 // Accepts a Host header, a URL hostname or a raw socket address. Splitting on the first
@@ -216,10 +224,14 @@ export async function canAccessLocalOnlyRoute(request) {
   return false;
 }
 
-/** Whether `pathname` is one of the LOCAL_ONLY routes. For handlers that aggregate other
- * routes' output (all-statuses), so the policy stays in this one list. */
-export function isLocalOnlyPath(pathname) {
-  return LOCAL_ONLY_PATHS.some((p) => pathname.startsWith(p)) || LOCAL_ONLY_PATTERNS.some((re) => re.test(pathname));
+/** Whether a request to `pathname` with `method` is one of the LOCAL_ONLY routes. For
+ * handlers that aggregate other routes' output (all-statuses), so the policy stays in this
+ * one place. `method` omitted means GET, the only method an aggregator re-serves. */
+export function isLocalOnlyPath(pathname, method = "GET") {
+  if (LOCAL_ONLY_PATHS.some((p) => pathname.startsWith(p))) return true;
+  if (LOCAL_ONLY_PATTERNS.some((re) => re.test(pathname))) return true;
+  const m = String(method || "GET").toUpperCase();
+  return LOCAL_ONLY_METHODS.some((e) => (pathname === e.path || pathname.startsWith(`${e.path}/`)) && e.methods.includes(m));
 }
 
 async function hasValidToken(request) {
@@ -266,7 +278,7 @@ export async function proxy(request) {
   const { pathname } = request.nextUrl;
 
   // Local-only gate for spawn-capable / host-secret routes.
-  if (isLocalOnlyPath(pathname)) {
+  if (isLocalOnlyPath(pathname, request.method)) {
     if (!(await canAccessLocalOnlyRoute(request))) {
       return NextResponse.json({ error: "Local only: CLI token required" }, { status: 403 });
     }
