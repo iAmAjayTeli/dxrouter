@@ -110,7 +110,13 @@ const LOCAL_ONLY_PATHS = [
 // ~/.codex/config.toml, VS Code model files, ...) and its GET returns those files,
 // credentials included. A pattern rather than a list so a new tool cannot ship
 // session-level by omission. cowork-settings (above) already matched by prefix.
-const LOCAL_ONLY_PATTERNS = [/^\/api\/cli-tools\/[a-z0-9-]+-settings(\/|$)/];
+const LOCAL_ONLY_PATTERNS = [
+  /^\/api\/cli-tools\/[a-z0-9-]+-settings(\/|$)/,
+  // OAuth callback listeners (trae/windsurf/zed/codex/xai): bind or kill a local HTTP
+  // listener, and for codex/xai register a session from query values. They only receive
+  // a browser redirect to localhost on this host, so only a browser here can use them.
+  /^\/api\/oauth\/[^/]+\/(start-proxy|stop-proxy)\/?$/,
+];
 
 // Method-scoped entries of the same LOCAL_ONLY policy, for routes whose reads are
 // harmless but whose writes control the host. Same gate, same refusal.

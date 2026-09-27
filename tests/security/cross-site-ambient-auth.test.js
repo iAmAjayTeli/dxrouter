@@ -74,7 +74,6 @@ beforeEach(() => {
 
 describe("the session cookie is refused when another site sent the request", () => {
   const routes = [
-    "/api/oauth/codex/start-proxy", // starts a listener, registers a session from the query
     "/api/usage/conn-1", // refreshes and rewrites stored OAuth tokens
     "/api/providers/suggested-models", // server-side fetch of a caller-chosen URL
     "/api/keys", // plain protected route
@@ -86,6 +85,14 @@ describe("the session cookie is refused when another site sent the request", () 
 
   it.each(routes)("same-site (another localhost port) %s", async (path) => {
     expect((await proxy(browser(path, "same-site"))).status).toBe(401);
+  });
+
+  // start-proxy became LOCAL_ONLY (oauth-callback-listeners-local-only.test.js), so the
+  // same cross-site request is now refused one gate earlier, by the local-only check
+  // (403) rather than the session check (401). Still refused, for the same reason: the
+  // cookie does not authenticate a request from another site.
+  it.each(["cross-site", "same-site"])("%s /api/oauth/codex/start-proxy is refused at the local-only gate", async (site) => {
+    expect((await proxy(browser("/api/oauth/codex/start-proxy", site))).status).toBe(403);
   });
 
   it("LOCAL_ONLY route (spawns an MCP child) from another site", async () => {
