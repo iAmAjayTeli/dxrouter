@@ -70,6 +70,10 @@ const PROTECTED_API_PATHS = [
 // Routes that spawn child processes or read host secrets — restrict to localhost.
 const LOCAL_ONLY_PATHS = [
   "/api/cli-tools/cowork-settings",
+  // Policy A: probes an MCP server at a caller-chosen URL (three server-side POSTs,
+  // redirects followed) and reflects the result. Its only use is the Cowork marketplace,
+  // whose output is applied through cowork-settings above.
+  "/api/cli-tools/cowork-mcp-tools",
   "/api/cli-tools/antigravity-mitm",
   "/api/mcp/",
   "/api/tunnel/tailscale-install",
