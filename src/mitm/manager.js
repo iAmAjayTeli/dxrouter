@@ -4,7 +4,6 @@ const fs = require("fs");
 const os = require("os");
 const net = require("net");
 const https = require("https");
-const crypto = require("crypto");
 const { addDNSEntry, removeDNSEntry, removeAllDNSEntries, removeAllDNSEntriesSync, checkAllDNSStatus, TOOL_HOSTS, isSudoAvailable, isSudoPasswordRequired } = require("./dns/dnsConfig");
 const { isAdmin } = require("./winElevated.js");
 
@@ -115,8 +114,6 @@ function ensureRuntimeServer(bundledPath) {
 }
 
 const SERVER_PATH = ensureRuntimeServer(resolveBundledServerPath());
-const ENCRYPT_ALGO = "aes-256-gcm";
-const ENCRYPT_SALT = "9router-mitm-pwd";
 
 function getProcessUsingPort443() {
   try {
@@ -172,37 +169,9 @@ function killProcess(pid, force = false, sudoPassword = null) {
   }
 }
 
-function deriveKey() {
-  try {
-    const { machineIdSync } = require("node-machine-id");
-    const raw = machineIdSync();
-    return crypto.createHash("sha256").update(raw + ENCRYPT_SALT).digest();
-  } catch {
-    return crypto.createHash("sha256").update(ENCRYPT_SALT).digest();
-  }
-}
-
-function encryptPassword(plaintext) {
-  const key = deriveKey();
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv(ENCRYPT_ALGO, key, iv);
-  const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return `${iv.toString("hex")}:${tag.toString("hex")}:${encrypted.toString("hex")}`;
-}
-
-function decryptPassword(stored) {
-  try {
-    const [ivHex, tagHex, dataHex] = stored.split(":");
-    if (!ivHex || !tagHex || !dataHex) return null;
-    const key = deriveKey();
-    const decipher = crypto.createDecipheriv(ENCRYPT_ALGO, key, Buffer.from(ivHex, "hex"));
-    decipher.setAuthTag(Buffer.from(tagHex, "hex"));
-    return decipher.update(Buffer.from(dataHex, "hex")) + decipher.final("utf8");
-  } catch {
-    return null;
-  }
-}
+// The sudo password's encryption lives in src/lib/security/sudoSecret.js (master key,
+// dxr1 envelope). The machine-id-derived key that used to be here is read-only there,
+// for migrating records written before it was retired.
 
 let _getSettings = null;
 let _updateSettings = null;
@@ -216,7 +185,16 @@ async function saveMitmSettings(enabled, password) {
   if (!_updateSettings) return;
   try {
     const updates = { mitmEnabled: enabled };
-    if (password) updates.mitmSudoEncrypted = encryptPassword(password);
+    if (password) {
+      // Master key only (src/lib/security/sudoSecret.js). If it cannot be sealed, store
+      // nothing rather than plaintext or the retired machine-id format.
+      try {
+        const { sealSudoPassword } = await import("../lib/security/sudoSecret.js");
+        updates.mitmSudoEncrypted = sealSudoPassword(password);
+      } catch (e) {
+        err(`Sudo password not saved (master key unavailable): ${e.message}`);
+      }
+    }
     await _updateSettings(updates);
   } catch (e) {
     err(`Failed to save settings: ${e.message}`);
@@ -237,7 +215,18 @@ async function loadEncryptedPassword() {
   try {
     const settings = await _getSettings();
     if (!settings.mitmSudoEncrypted) return null;
-    return decryptPassword(settings.mitmSudoEncrypted);
+    const { openSudoPassword, sealSudoPassword } = await import("../lib/security/sudoSecret.js");
+    const { plaintext, format } = openSudoPassword(settings.mitmSudoEncrypted);
+    if (plaintext && format === "legacy" && _updateSettings) {
+      // One-way migration to the master key. If sealing fails (no usable master key),
+      // the legacy record is left exactly as it was: never discarded, never downgraded.
+      try {
+        await _updateSettings({ mitmSudoEncrypted: sealSudoPassword(plaintext) });
+      } catch (e) {
+        err(`Sudo password left in legacy format (master key unavailable): ${e.message}`);
+      }
+    }
+    return plaintext;
   } catch {
     return null;
   }
@@ -901,4 +890,6 @@ module.exports = {
   restoreToolDNS,
   hasDnsPrivilege,
   removeAllDNSEntriesSync,
+  // Test seam: the write path otherwise only runs inside startServer()/enableToolDNS().
+  __test__: { saveMitmSettings },
 };
