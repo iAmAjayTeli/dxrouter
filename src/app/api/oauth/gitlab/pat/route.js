@@ -29,11 +29,23 @@ export async function POST(request) {
     });
 
     if (!userRes.ok) {
-      const err = await userRes.text();
-      return NextResponse.json({ error: `GitLab token verification failed: ${err}` }, { status: 401 });
+      // Status only. baseUrl is caller-supplied (self-hosted GitLab is legitimate, so the
+      // host cannot be restricted); echoing the upstream body made this route a way to
+      // read any URL the server can reach.
+      await userRes.body?.cancel?.().catch(() => {});
+      return NextResponse.json(
+        { error: `GitLab token verification failed (HTTP ${userRes.status}${userRes.statusText ? ` ${userRes.statusText}` : ""})` },
+        { status: 401 }
+      );
     }
 
-    const user = await userRes.json();
+    let user;
+    try {
+      user = await userRes.json();
+    } catch {
+      // The parser's message quotes the start of the body; do not pass it on.
+      return NextResponse.json({ error: "GitLab token verification failed: not a GitLab API response" }, { status: 502 });
+    }
     const email = user.email || user.public_email || "";
 
     await createProviderConnection({
