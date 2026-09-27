@@ -217,14 +217,20 @@ async function loadEncryptedPassword() {
     if (!settings.mitmSudoEncrypted) return null;
     const { openSudoPassword, sealSudoPassword } = await import("../lib/security/sudoSecret.js");
     const { plaintext, format } = openSudoPassword(settings.mitmSudoEncrypted);
-    if (plaintext && format === "legacy" && _updateSettings) {
-      // One-way migration to the master key. If sealing fails (no usable master key),
-      // the legacy record is left exactly as it was: never discarded, never downgraded.
+    if (plaintext && format === "legacy") {
+      // A legacy record is only honoured through the master key: re-seal it first, and
+      // return the password only once that worked. With no usable master key the legacy
+      // record is left exactly as it was (never discarded, never downgraded) and no
+      // password is returned, so the machine-id key alone can never yield it.
+      let sealed;
       try {
-        await _updateSettings({ mitmSudoEncrypted: sealSudoPassword(plaintext) });
+        sealed = sealSudoPassword(plaintext);
       } catch (e) {
-        err(`Sudo password left in legacy format (master key unavailable): ${e.message}`);
+        err(`Sudo password unavailable until the master key is (legacy record kept): ${e.message}`);
+        return null;
       }
+      if (!_updateSettings) return null;
+      await _updateSettings({ mitmSudoEncrypted: sealed });
     }
     return plaintext;
   } catch {

@@ -4,7 +4,8 @@
  * Current format: the standard `dxr1:` envelope from ./crypto.js (master key, AES-256-GCM),
  * the same format as every other secret DXRouter stores. No second format is introduced.
  *
- * Legacy format (read-only, migrated on first successful read by src/mitm/manager.js):
+ * Legacy format (read-only; src/mitm/manager.js re-seals it with the master key on first
+ * read and returns it only once that succeeded):
  * `ivHex(24):tagHex(32):ctHex`, AES-256-GCM under sha256(machineId + LEGACY_SALT), or
  * sha256(LEGACY_SALT) alone when node-machine-id was unavailable when it was written.
  * That key is derivable from the machine id (or from nothing), which is why it is retired.

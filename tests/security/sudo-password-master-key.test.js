@@ -25,8 +25,14 @@ const TEST_KEY = "00112233445566778899aabbccddeeff00112233445566778899aabbccddee
 const OTHER_KEY = "ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100";
 const PLAINTEXT = "sudo-pass-Zq81-do-not-persist";
 
-const saved = { DXR_DATA_DIR: process.env.DXR_DATA_DIR, DXR_MASTER_KEY: process.env.DXR_MASTER_KEY };
+const saved = {
+  DXR_DATA_DIR: process.env.DXR_DATA_DIR,
+  DXR_MASTER_KEY: process.env.DXR_MASTER_KEY,
+  DXR_KEY_STORE: process.env.DXR_KEY_STORE,
+  PATH: process.env.PATH,
+};
 const DIR = fs.mkdtempSync(path.join(os.tmpdir(), "dxr-sudo-mk-"));
+const EMPTY_BIN = fs.mkdtempSync(path.join(os.tmpdir(), "dxr-sudo-nobin-"));
 process.env.DXR_DATA_DIR = DIR;
 process.env.DXR_MASTER_KEY = TEST_KEY;
 
@@ -57,7 +63,20 @@ const countingUpdate = async (patch) => {
 
 const stored = async () => (await getSettings()).mitmSudoEncrypted;
 const useKey = (hex) => {
+  process.env.PATH = saved.PATH;
+  delete process.env.DXR_KEY_STORE;
   process.env.DXR_MASTER_KEY = hex;
+  __resetMasterKeyCache();
+};
+/**
+ * No master key at all: DXR_MASTER_KEY unset and the OS keychain required but
+ * unreachable (its CLI - powershell.exe / security / secret-tool - is not on PATH),
+ * so masterKey.js refuses with MASTER_KEY_UNAVAILABLE on every platform.
+ */
+const useNoKey = () => {
+  delete process.env.DXR_MASTER_KEY;
+  process.env.DXR_KEY_STORE = "keychain";
+  process.env.PATH = EMPTY_BIN;
   __resetMasterKeyCache();
 };
 
@@ -92,7 +111,9 @@ afterAll(() => {
     else process.env[k] = v;
   }
   __resetMasterKeyCache();
-  try { fs.rmSync(DIR, { recursive: true, force: true }); } catch { /* temp */ }
+  for (const d of [DIR, EMPTY_BIN]) {
+    try { fs.rmSync(d, { recursive: true, force: true }); } catch { /* temp */ }
+  }
 });
 
 describe("legacy records migrate to the master key", () => {
@@ -199,24 +220,42 @@ describe("fails closed", () => {
     expect(sudo.openSudoPassword("hunter2")).toEqual({ plaintext: null, format: "unknown" });
   });
 
-  it("an invalid master key: legacy record is kept, not discarded or rewritten", async () => {
-    const legacy = legacyEncrypt(PLAINTEXT, { machineBound: true });
-    await updateSettings({ mitmSudoEncrypted: legacy });
-    writes = 0;
+  const badKeys = [
+    ["an invalid master key", () => useKey("not-a-valid-key")],
+    ["no master key at all", useNoKey],
+  ];
+  const records = [
+    ["legacy", () => legacyEncrypt(PLAINTEXT, { machineBound: true })],
+    ["dxr1", () => sudo.sealSudoPassword(PLAINTEXT)],
+  ];
 
-    useKey("not-a-valid-key");
-    // The legacy record can still be read (its key does not depend on the master key),
-    // so MITM/Tailscale keep working; it just cannot be migrated yet.
-    expect(await manager.loadEncryptedPassword()).toBe(PLAINTEXT);
-    expect(await stored()).toBe(legacy);
-    expect(writes).toBe(0);
-  });
+  describe.each(badKeys)("%s", (_keyLabel, breakKey) => {
+    it.each(records)(
+      "a %s record: no password is returned, the record is neither changed nor removed, and it opens again once the key is back",
+      async (_fmt, makeRecord) => {
+        const record = makeRecord(); // written while the real key is active
+        await updateSettings({ mitmSudoEncrypted: record });
+        writes = 0;
 
-  it("an invalid master key: a new write persists nothing rather than a weaker format", async () => {
-    await updateSettings({ mitmSudoEncrypted: null });
-    useKey("not-a-valid-key");
-    await manager.__test__.saveMitmSettings(true, PLAINTEXT);
-    expect(await stored()).toBeNull();
-    expect(persistedBytes().includes(Buffer.from(PLAINTEXT, "utf8"))).toBe(false);
+        breakKey();
+        const returned = await manager.loadEncryptedPassword();
+        expect(returned).toBeNull(); // not exposed, not even from the legacy format
+        expect(await stored()).toBe(record); // byte-identical: not discarded, not rewritten
+        expect(writes).toBe(0);
+
+        useKey(TEST_KEY); // key restored: the preserved record is still usable
+        expect(await manager.loadEncryptedPassword()).toBe(PLAINTEXT);
+        expect((await stored()).startsWith(ENVELOPE_PREFIX)).toBe(true);
+      }
+    );
+
+    it("a new write persists nothing rather than a weaker format", async () => {
+      await updateSettings({ mitmSudoEncrypted: null });
+      breakKey();
+      await manager.__test__.saveMitmSettings(true, PLAINTEXT);
+      useKey(TEST_KEY);
+      expect(await stored()).toBeNull();
+      expect(persistedBytes().includes(Buffer.from(PLAINTEXT, "utf8"))).toBe(false);
+    });
   });
 });
